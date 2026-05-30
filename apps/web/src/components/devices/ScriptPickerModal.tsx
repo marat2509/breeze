@@ -5,6 +5,8 @@ import { Dialog } from '../shared/Dialog';
 import { fetchWithAuth } from '../../stores/auth';
 import type { ScriptParameter } from '../scripts/ScriptFormSchema';
 import ScriptParametersForm, { validateParameters } from '../scripts/ScriptParametersForm';
+import { extractLocalizedApiError } from '@/lib/apiError';
+import { useI18n } from '@/i18n/react';
 
 export type ScriptLanguage = 'powershell' | 'bash' | 'python' | 'cmd';
 export type OSType = 'windows' | 'macos' | 'linux';
@@ -36,6 +38,16 @@ const languageConfig: Record<ScriptLanguage, { label: string; color: string; ico
   cmd: { label: 'CMD', color: 'bg-gray-500/20 text-gray-700', icon: '>' }
 };
 
+function countKey(base: string, count: number, locale: string): string {
+  if (locale !== 'ru') return count === 1 ? `${base}One` : `${base}Many`;
+
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${base}One`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${base}Few`;
+  return `${base}Many`;
+}
+
 export default function ScriptPickerModal({
   isOpen,
   onClose,
@@ -43,6 +55,7 @@ export default function ScriptPickerModal({
   deviceHostname,
   deviceOs
 }: ScriptPickerModalProps) {
+  const { locale, t } = useI18n();
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -74,7 +87,8 @@ export default function ScriptPickerModal({
 
       const response = await fetchWithAuth('/scripts?includeSystem=true');
       if (!response.ok) {
-        throw new Error('Failed to fetch scripts');
+        const data = await response.json().catch(() => ({}));
+        throw new Error(extractLocalizedApiError(data, t('scripts.picker.fetchFailed'), locale));
       }
 
       const data = await response.json();
@@ -84,10 +98,10 @@ export default function ScriptPickerModal({
       const transformedScripts: Script[] = scriptList
         .map((s: Record<string, unknown>) => ({
           id: s.id as string,
-          name: (s.name ?? 'Unnamed Script') as string,
+          name: (s.name ?? t('scripts.picker.unnamedScript')) as string,
           description: s.description as string | undefined,
           language: (s.language ?? 'bash') as ScriptLanguage,
-          category: (s.category ?? 'General') as string,
+          category: (s.category ?? t('scripts.picker.generalCategory')) as string,
           osTypes: (s.osTypes ?? s.os_types ?? ['macos', 'linux']) as OSType[],
           isSystem: s.isSystem as boolean | undefined,
           parameters: Array.isArray(s.parameters) ? (s.parameters as ScriptParameter[]) : undefined
@@ -95,7 +109,7 @@ export default function ScriptPickerModal({
 
       setScripts(transformedScripts);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load scripts');
+      setError(err instanceof Error ? err.message : t('scripts.picker.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -161,7 +175,10 @@ export default function ScriptPickerModal({
 
   const handleRunScript = () => {
     if (!selectedScript?.parameters) return;
-    const error = validateParameters(selectedScript.parameters, paramValues);
+    const error = validateParameters(selectedScript.parameters, paramValues, {
+      required: (name) => t('scripts.parameters.required', { name }),
+      invalidNumber: (name) => t('scripts.parameters.invalidNumber', { name }),
+    });
     if (error) {
       setParamError(error);
       return;
@@ -170,23 +187,30 @@ export default function ScriptPickerModal({
     onClose();
   };
 
+  const title = t('scripts.picker.title');
+  const availableCountLabel = t(
+    countKey('scripts.picker.available', filteredScripts.length, locale),
+    { count: filteredScripts.length },
+  );
+
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Select Script" maxWidth="2xl" className="max-h-[80vh] overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onClose={onClose} title={title} maxWidth="2xl" className="max-h-[80vh] overflow-hidden flex flex-col">
       {view === 'list' ? (
         <>
           {/* Header */}
           <div className="flex items-center justify-between border-b px-6 py-4">
             <div>
-              <h2 className="text-lg font-semibold">Select Script</h2>
+              <h2 className="text-lg font-semibold">{title}</h2>
               {deviceHostname && (
                 <p className="text-sm text-muted-foreground">
-                  Run script on {deviceHostname}
+                  {t('scripts.picker.runOnDevice', { hostname: deviceHostname })}
                 </p>
               )}
             </div>
             <button
               type="button"
               onClick={onClose}
+              aria-label={t('common.dismiss')}
               className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
             >
               <X className="h-5 w-5" />
@@ -200,7 +224,7 @@ export default function ScriptPickerModal({
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="search"
-                  placeholder="Search scripts..."
+                  placeholder={t('scripts.picker.searchPlaceholder')}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -212,7 +236,7 @@ export default function ScriptPickerModal({
                   onChange={e => setCategoryFilter(e.target.value)}
                   className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="all">All Categories</option>
+                  <option value="all">{t('scripts.picker.allCategories')}</option>
                   {categories.map(cat => (
                     <option key={cat} value={cat}>
                       {cat}
@@ -225,8 +249,8 @@ export default function ScriptPickerModal({
                 onChange={e => setRunAs(e.target.value as ScriptRunAsSelection)}
                 className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="system">Run as: System</option>
-                <option value="user">Run as: Logged-in user</option>
+                <option value="system">{t('scripts.picker.runAsSystem')}</option>
+                <option value="user">{t('scripts.picker.runAsUser')}</option>
               </select>
             </div>
           </div>
@@ -243,7 +267,7 @@ export default function ScriptPickerModal({
               </div>
             ) : filteredScripts.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
-                {scripts.length === 0 ? 'No scripts available' : 'No scripts match your search'}
+                {scripts.length === 0 ? t('scripts.picker.noScriptsAvailable') : t('scripts.picker.noScriptsMatch')}
               </div>
             ) : (
               <div className="space-y-2">
@@ -276,7 +300,7 @@ export default function ScriptPickerModal({
                         </span>
                         {script.parameters && script.parameters.length > 0 && (
                           <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5">
-                            {script.parameters.length} param{script.parameters.length !== 1 ? 's' : ''}
+                            {t(countKey('scripts.picker.paramCount', script.parameters.length, locale), { count: script.parameters.length })}
                           </span>
                         )}
                       </div>
@@ -291,14 +315,14 @@ export default function ScriptPickerModal({
           {/* Footer */}
           <div className="flex items-center justify-between border-t px-6 py-4">
             <p className="text-sm text-muted-foreground">
-              {filteredScripts.length} script(s) available
+              {availableCountLabel}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </>
@@ -311,12 +335,12 @@ export default function ScriptPickerModal({
                 type="button"
                 onClick={handleBack}
                 className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
-                aria-label="Back to script list"
+                aria-label={t('scripts.picker.backToList')}
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <div>
-                <h2 className="text-lg font-semibold">Configure Parameters</h2>
+                <h2 className="text-lg font-semibold">{t('scripts.picker.configureParameters')}</h2>
                 {selectedScript && (
                   <p className="text-sm text-muted-foreground">{selectedScript.name}</p>
                 )}
@@ -325,6 +349,7 @@ export default function ScriptPickerModal({
             <button
               type="button"
               onClick={onClose}
+              aria-label={t('common.dismiss')}
               className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
             >
               <X className="h-5 w-5" />
@@ -354,7 +379,7 @@ export default function ScriptPickerModal({
               onClick={onClose}
               className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -362,7 +387,7 @@ export default function ScriptPickerModal({
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               <Play className="h-4 w-4" />
-              Run Script
+              {t('scripts.picker.runScript')}
             </button>
           </div>
         </>

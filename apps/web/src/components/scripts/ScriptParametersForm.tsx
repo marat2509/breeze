@@ -1,4 +1,15 @@
 import type { ScriptParameter } from './ScriptFormSchema';
+import { useI18n } from '@/i18n/react';
+
+type ParameterValidationMessages = {
+  required: (name: string) => string;
+  invalidNumber: (name: string) => string;
+};
+
+const defaultValidationMessages: ParameterValidationMessages = {
+  required: (name) => `Parameter "${name}" is required`,
+  invalidNumber: (name) => `Parameter "${name}" must be a valid number`,
+};
 
 type ScriptParametersFormProps = {
   parameters: ScriptParameter[];
@@ -8,18 +19,19 @@ type ScriptParametersFormProps = {
 
 export function validateParameters(
   parameters: ScriptParameter[],
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  messages: ParameterValidationMessages = defaultValidationMessages
 ): string | null {
   for (const param of parameters) {
     const value = values[param.name];
     if (param.required) {
       if (value === undefined || value === null || value === '' || (param.type === 'string' && String(value).trim() === '')) {
-        return `Parameter "${param.name}" is required`;
+        return messages.required(param.name);
       }
     }
     if (param.type === 'number' && value !== undefined && value !== null && value !== '') {
       if (typeof value !== 'number' || Number.isNaN(value)) {
-        return `Parameter "${param.name}" must be a valid number`;
+        return messages.invalidNumber(param.name);
       }
     }
   }
@@ -31,11 +43,13 @@ export default function ScriptParametersForm({
   values,
   onChange
 }: ScriptParametersFormProps) {
+  const { t } = useI18n();
+
   if (parameters.length === 0) return null;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold">Parameters</h3>
+      <h3 className="text-sm font-semibold">{t('scripts.parameters.title')}</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         {parameters.map(param => (
           <div key={param.name} className="space-y-1">
@@ -51,7 +65,7 @@ export default function ScriptParametersForm({
                   onChange={e => onChange(param.name, e.target.checked)}
                   className="h-4 w-4 rounded border-border"
                 />
-                <span className="ml-2 text-sm">Enabled</span>
+                <span className="ml-2 text-sm">{t('scripts.parameters.enabled')}</span>
               </div>
             ) : param.type === 'select' && param.options ? (
               <select
@@ -59,7 +73,7 @@ export default function ScriptParametersForm({
                 onChange={e => onChange(param.name, e.target.value)}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Select...</option>
+                <option value="">{t('scripts.parameters.selectPlaceholder')}</option>
                 {param.options.split(',').map(opt => (
                   <option key={opt.trim()} value={opt.trim()}>
                     {opt.trim()}

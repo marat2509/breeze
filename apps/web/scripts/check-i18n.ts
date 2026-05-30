@@ -82,6 +82,8 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/DeviceSettingsModal.tsx',
   'src/components/devices/DeviceList.tsx',
   'src/components/devices/DevicesPage.tsx',
+  'src/components/devices/ScriptPickerModal.tsx',
+  'src/components/scripts/ScriptParametersForm.tsx',
   'src/components/auth/MFAVerifyForm.tsx',
   'src/components/layout/CommandPalette.tsx',
   'src/components/layout/Header.tsx',

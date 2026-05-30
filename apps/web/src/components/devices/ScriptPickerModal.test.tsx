@@ -42,8 +42,39 @@ const SCRIPTS_DATA = [
   },
 ];
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 describe('ScriptPickerModal', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    window.localStorage.setItem('breeze_locale', 'en');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
     vi.clearAllMocks();
     fetchWithAuthMock.mockResolvedValue(makeJsonResponse(SCRIPTS_DATA));
   });
@@ -72,6 +103,38 @@ describe('ScriptPickerModal', () => {
 
     // Should not have transitioned to params view
     expect(screen.queryByText('Configure Parameters')).toBeNull();
+  });
+
+  it('renders Russian list and parameter labels from the selected locale', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+
+    render(
+      <ScriptPickerModal isOpen onClose={vi.fn()} onSelect={vi.fn()} deviceHostname="host-1" />
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Выбор скрипта' })).toBeDefined();
+    expect(screen.getByText('Выбор скрипта')).toBeDefined();
+    expect(screen.getByText('Запустить скрипт на host-1')).toBeDefined();
+    expect(screen.getByPlaceholderText('Поиск скриптов...')).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Запуск от: System' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Запуск от: пользователь' })).toBeDefined();
+
+    await waitFor(() => {
+      expect(screen.getByText('No Params')).toBeDefined();
+    });
+
+    expect(screen.getByRole('option', { name: 'Все категории' })).toBeDefined();
+    expect(screen.getByText('2 скрипта доступно')).toBeDefined();
+
+    fireEvent.click(screen.getByText('With Params'));
+
+    expect(screen.getByText('Настроить параметры')).toBeDefined();
+    expect(screen.getByText('Параметры')).toBeDefined();
+    expect(screen.getByLabelText('Назад к списку скриптов')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Запустить скрипт'));
+
+    expect(screen.getByText('Параметр "message" обязателен')).toBeDefined();
   });
 
   it('selecting a parameterized script transitions to params view and seeds defaults', async () => {
