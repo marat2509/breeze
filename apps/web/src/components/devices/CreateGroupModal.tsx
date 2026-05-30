@@ -3,6 +3,8 @@ import type { FilterConditionGroup } from '@breeze/shared';
 import { Dialog } from '../shared/Dialog';
 import { FilterBuilder, DEFAULT_FILTER_FIELDS } from '../filters/FilterBuilder';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
+import { extractLocalizedApiError } from '@/lib/apiError';
 
 type GroupType = 'static' | 'dynamic';
 
@@ -18,6 +20,7 @@ const makeEmptyFilter = (): FilterConditionGroup => ({
 });
 
 export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateGroupModalProps) {
+  const { locale, t } = useI18n();
   const [name, setName] = useState('');
   const [type, setType] = useState<GroupType>('static');
   const [filterConditions, setFilterConditions] = useState<FilterConditionGroup>(makeEmptyFilter());
@@ -44,14 +47,14 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? `Failed to create group (${res.status})`);
+        throw new Error(extractLocalizedApiError(data, t('devices.groupModal.createFailed'), locale));
       }
 
       const data = await res.json();
       const newGroupId = data.data?.id ?? data.id;
 
       if (!newGroupId || typeof newGroupId !== 'string') {
-        throw new Error('Group created but server response was missing the group ID. Please refresh the page.');
+        throw new Error(t('devices.groupModal.missingGroupId'));
       }
 
       // Reset form
@@ -60,7 +63,7 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
       setFilterConditions(makeEmptyFilter());
       onCreated(newGroupId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create group');
+      setError(err instanceof Error ? err.message : t('devices.groupModal.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -75,26 +78,26 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
   };
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} title="New Device Group" maxWidth="lg">
+    <Dialog open={isOpen} onClose={handleClose} title={t('devices.groupModal.title')} maxWidth="lg">
       <div className="p-6">
-        <h2 className="text-lg font-semibold mb-4">New Device Group</h2>
+        <h2 className="text-lg font-semibold mb-4">{t('devices.groupModal.title')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="group-name" className="block text-sm font-medium mb-1">Name</label>
+            <label htmlFor="group-name" className="block text-sm font-medium mb-1">{t('devices.groupModal.name')}</label>
             <input
               id="group-name"
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Production Servers"
+              placeholder={t('devices.groupModal.namePlaceholder')}
               required
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Type</label>
+            <label className="block text-sm font-medium mb-1">{t('devices.groupModal.type')}</label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -103,7 +106,7 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
                   type === 'static' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
                 }`}
               >
-                Static
+                {t('devices.groupModal.static')}
               </button>
               <button
                 type="button"
@@ -112,19 +115,19 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
                   type === 'dynamic' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
                 }`}
               >
-                Dynamic
+                {t('devices.groupModal.dynamic')}
               </button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {type === 'static'
-                ? 'Manually add and remove devices after creation.'
-                : 'Devices are auto-assigned based on filter rules.'}
+                ? t('devices.groupModal.staticHelp')
+                : t('devices.groupModal.dynamicHelp')}
             </p>
           </div>
 
           {type === 'dynamic' && (
             <div>
-              <label className="block text-sm font-medium mb-1">Filter Rules</label>
+              <label className="block text-sm font-medium mb-1">{t('devices.groupModal.filterRules')}</label>
               <FilterBuilder
                 value={filterConditions}
                 onChange={setFilterConditions}
@@ -144,14 +147,14 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }: CreateG
               onClick={handleClose}
               className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={submitting || !name.trim()}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : 'Create Group'}
+              {submitting ? t('devices.groupModal.creating') : t('devices.groupModal.createGroup')}
             </button>
           </div>
         </form>
