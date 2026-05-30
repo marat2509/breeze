@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Monitor, Users, Filter as FilterIcon, Globe } from 'lucide-react';
 import type { FilterConditionGroup, DeploymentTargetConfig, DeploymentTargetType } from '@breeze/shared';
 import { FilterBuilder, DEFAULT_FILTER_FIELDS } from './FilterBuilder';
 import { FilterPreview } from './FilterPreview';
 import { useFilterPreview } from '../../hooks/useFilterPreview';
 import { fetchWithAuth } from '../../stores/auth';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 type TargetMode = 'all' | 'manual' | 'groups' | 'filter';
 
@@ -47,11 +49,11 @@ const MODE_ICONS: Record<TargetMode, typeof Globe> = {
   filter: FilterIcon
 };
 
-const MODE_LABELS: Record<TargetMode, string> = {
-  all: 'All Devices',
-  manual: 'Select Devices',
-  groups: 'Device Groups',
-  filter: 'Advanced Filter'
+const MODE_LABEL_KEYS: Record<TargetMode, string> = {
+  all: 'filters.targetSelector.modes.all',
+  manual: 'filters.targetSelector.modes.manual',
+  groups: 'filters.targetSelector.modes.groups',
+  filter: 'filters.targetSelector.modes.filter'
 };
 
 const EMPTY_FILTER: FilterConditionGroup = {
@@ -75,6 +77,14 @@ function targetTypeFromMode(mode: TargetMode): DeploymentTargetType {
   return 'all';
 }
 
+function pluralSuffix(value: number): 'One' | 'Few' | 'Many' {
+  const mod10 = Math.abs(value) % 10;
+  const mod100 = Math.abs(value) % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'One';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'Few';
+  return 'Many';
+}
+
 export function DeviceTargetSelector({
   value,
   onChange,
@@ -86,6 +96,7 @@ export function DeviceTargetSelector({
   showSavedFilters = true,
   className = ''
 }: DeviceTargetSelectorProps) {
+  const { locale, t } = useI18n();
   const [activeMode, setActiveMode] = useState<TargetMode>(modeFromTargetType(value.type));
   const [deviceSearch, setDeviceSearch] = useState('');
   const [sites, setSites] = useState<SiteOption[]>(propSites ?? []);
@@ -199,6 +210,12 @@ export function DeviceTargetSelector({
     return devices.filter(d => d.hostname.toLowerCase().includes(q));
   }, [devices, deviceSearch]);
 
+  const countText = (baseKey: string, count: number) =>
+    t(`${baseKey}${pluralSuffix(count)}`, { count: formatNumber(count, locale) });
+
+  const statusLabel = (status: string) => t(`devices.status.${status}`, undefined, status);
+  const osLabel = (os: string) => t(`devices.osNames.${os}`, undefined, os);
+
   return (
     <div className={`rounded-lg border bg-card ${className}`}>
       {/* Mode tabs */}
@@ -218,7 +235,7 @@ export function DeviceTargetSelector({
               }`}
             >
               <Icon className="h-4 w-4" />
-              {MODE_LABELS[mode]}
+              {t(MODE_LABEL_KEYS[mode])}
             </button>
           );
         })}
@@ -230,9 +247,9 @@ export function DeviceTargetSelector({
           <div className="flex items-center gap-3 py-4">
             <Globe className="h-8 w-8 text-muted-foreground" />
             <div>
-              <p className="font-medium">Targets all managed devices</p>
+              <p className="font-medium">{t('filters.targetSelector.allTargets')}</p>
               <p className="text-sm text-muted-foreground">
-                {totalDeviceCount} device{totalDeviceCount !== 1 ? 's' : ''} total
+                {countText('filters.targetSelector.deviceCountTotal', totalDeviceCount)}
               </p>
             </div>
           </div>
@@ -242,7 +259,7 @@ export function DeviceTargetSelector({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {value.deviceIds?.length ?? 0} device{(value.deviceIds?.length ?? 0) !== 1 ? 's' : ''} selected
+                {countText('filters.targetSelector.deviceSelected', value.deviceIds?.length ?? 0)}
               </span>
             </div>
             <div className="relative">
@@ -251,13 +268,15 @@ export function DeviceTargetSelector({
                 type="search"
                 value={deviceSearch}
                 onChange={(e) => setDeviceSearch(e.target.value)}
-                placeholder="Search devices..."
+                placeholder={t('filters.targetSelector.searchDevices')}
                 className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div className="max-h-64 overflow-y-auto space-y-1">
               {filteredDevices.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">No devices found</p>
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {t('filters.targetSelector.noDevicesFound')}
+                </p>
               ) : (
                 filteredDevices.map(device => {
                   const checked = value.deviceIds?.includes(device.id) ?? false;
@@ -275,7 +294,7 @@ export function DeviceTargetSelector({
                       <div className="flex-1 min-w-0">
                         <span className="font-medium truncate block">{device.hostname}</span>
                         {device.os && (
-                          <span className="text-xs text-muted-foreground">{device.os}</span>
+                          <span className="text-xs text-muted-foreground">{osLabel(device.os)}</span>
                         )}
                       </div>
                       {device.status && (
@@ -284,7 +303,7 @@ export function DeviceTargetSelector({
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                             : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                         }`}>
-                          {device.status}
+                          {statusLabel(device.status)}
                         </span>
                       )}
                     </label>
@@ -298,11 +317,13 @@ export function DeviceTargetSelector({
         {activeMode === 'groups' && (
           <div className="space-y-3">
             <span className="text-sm font-medium">
-              {value.groupIds?.length ?? 0} group{(value.groupIds?.length ?? 0) !== 1 ? 's' : ''} selected
+              {countText('filters.targetSelector.groupSelected', value.groupIds?.length ?? 0)}
             </span>
             <div className="max-h-64 overflow-y-auto space-y-1">
               {groups.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">No device groups available</p>
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {t('filters.targetSelector.noGroups')}
+                </p>
               ) : (
                 groups.map(group => {
                   const checked = value.groupIds?.includes(group.id) ?? false;
@@ -321,7 +342,7 @@ export function DeviceTargetSelector({
                         <span className="font-medium">{group.name}</span>
                         {typeof group.deviceCount === 'number' && (
                           <span className="ml-2 text-xs text-muted-foreground">
-                            ({group.deviceCount} device{group.deviceCount !== 1 ? 's' : ''})
+                            {countText('filters.targetSelector.groupDeviceCount', group.deviceCount)}
                           </span>
                         )}
                       </div>
@@ -337,13 +358,15 @@ export function DeviceTargetSelector({
           <div className="space-y-4">
             {showSavedFilters && savedFilters.length > 0 && (
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Load saved filter:</label>
+                <label className="text-sm font-medium text-muted-foreground">
+                  {t('filters.targetSelector.loadSavedFilter')}
+                </label>
                 <select
                   value={selectedSavedFilterId}
                   onChange={(e) => handleSavedFilterSelect(e.target.value)}
                   className="h-8 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">Select...</option>
+                  <option value="">{t('filters.targetSelector.selectSavedFilter')}</option>
                   {savedFilters.map(f => (
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))}
