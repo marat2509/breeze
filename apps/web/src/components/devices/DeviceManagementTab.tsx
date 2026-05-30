@@ -4,17 +4,13 @@ import {
   CheckCircle2,
   Clock,
   Globe,
-  Loader2,
   Monitor,
   RefreshCw,
-  Server,
-  Shield,
   ShieldCheck,
-  Wifi,
 } from 'lucide-react';
 
-import { friendlyFetchError } from '../../lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -115,10 +111,10 @@ const STATUS_BADGE: Record<DetectionStatus, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function formatDateTime(value: string): string {
+function formatDateTime(value: string, locale: 'en' | 'ru'): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
+  return date.toLocaleString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -140,6 +136,20 @@ function BoolFlag({ label, value }: { label: string; value: boolean }) {
   );
 }
 
+type TFunction = ReturnType<typeof useI18n>['t'];
+
+function categoryLabel(key: CategoryKey, t: TFunction): string {
+  return t(`deviceManagement.categories.${key}`, undefined, CATEGORY_LABELS[key]);
+}
+
+function joinTypeLabel(joinType: JoinType, t: TFunction): string {
+  return t(`deviceManagement.joinTypes.${joinType}`, undefined, JOIN_TYPE_LABELS[joinType]);
+}
+
+function statusLabel(status: DetectionStatus, t: TFunction): string {
+  return t(`deviceManagement.status.${status}`, undefined, status);
+}
+
 // ── Component ────────────────────────────────────────────────────────
 
 type DeviceManagementTabProps = {
@@ -147,6 +157,7 @@ type DeviceManagementTabProps = {
 };
 
 export default function DeviceManagementTab({ deviceId }: DeviceManagementTabProps) {
+  const { locale, t } = useI18n();
   const [data, setData] = useState<PostureResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -161,11 +172,12 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
       }
       setData(await response.json());
     } catch (err) {
-      setError(friendlyFetchError(err));
+      console.error('Failed to load management posture:', err);
+      setError(t('deviceManagement.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [deviceId]);
+  }, [deviceId, t]);
 
   useEffect(() => {
     fetchPosture();
@@ -178,7 +190,7 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading management posture...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceManagement.loading')}</p>
         </div>
       </div>
     );
@@ -195,7 +207,7 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
           onClick={fetchPosture}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceManagement.retry')}
         </button>
       </div>
     );
@@ -207,10 +219,9 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
     return (
       <div className="rounded-lg border bg-card p-8 text-center shadow-sm">
         <Monitor className="mx-auto h-10 w-10 text-muted-foreground/50" />
-        <h3 className="mt-4 font-semibold">No Management Data</h3>
+        <h3 className="mt-4 font-semibold">{t('deviceManagement.emptyTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          The agent hasn't reported management posture for this device yet.
-          Data is collected automatically during heartbeat cycles.
+          {t('deviceManagement.emptyDescription')}
         </p>
       </div>
     );
@@ -236,7 +247,7 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 mb-4">
             <Building2 className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Identity &amp; Directory Status</h3>
+            <h3 className="text-sm font-semibold">{t('deviceManagement.identityTitle')}</h3>
           </div>
           <button
             type="button"
@@ -244,46 +255,46 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
             className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            {t('deviceManagement.refresh')}
           </button>
         </div>
 
         <div className="rounded-md border bg-background p-4">
           <div className="flex items-center gap-2 mb-3">
             <Globe className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium">{JOIN_TYPE_LABELS[identity.joinType]}</span>
+            <span className="text-sm font-medium">{joinTypeLabel(identity.joinType, t)}</span>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <BoolFlag label="Azure AD / Entra ID Joined" value={identity.azureAdJoined} />
-              <BoolFlag label="Domain Joined" value={identity.domainJoined} />
-              <BoolFlag label="Workplace Joined" value={identity.workplaceJoined} />
+              <BoolFlag label={t('deviceManagement.identity.azureAdJoined')} value={identity.azureAdJoined} />
+              <BoolFlag label={t('deviceManagement.identity.domainJoined')} value={identity.domainJoined} />
+              <BoolFlag label={t('deviceManagement.identity.workplaceJoined')} value={identity.workplaceJoined} />
             </div>
 
             <div className="space-y-1.5 text-sm">
               {identity.domainName && (
                 <div>
-                  <span className="text-muted-foreground">Domain: </span>
+                  <span className="text-muted-foreground">{t('deviceManagement.identity.domainLabel')} </span>
                   <span className="font-medium">{identity.domainName}</span>
                 </div>
               )}
               {identity.tenantId && (
                 <div>
-                  <span className="text-muted-foreground">Tenant ID: </span>
+                  <span className="text-muted-foreground">{t('deviceManagement.identity.tenantIdLabel')} </span>
                   <span className="font-mono text-xs">{identity.tenantId}</span>
                 </div>
               )}
               {identity.mdmUrl && (
                 <div>
-                  <span className="text-muted-foreground">MDM Enrollment: </span>
+                  <span className="text-muted-foreground">{t('deviceManagement.identity.mdmEnrollmentLabel')} </span>
                   <span className="font-mono text-xs break-all">{identity.mdmUrl}</span>
                 </div>
               )}
             </div>
 
             <div className="text-sm">
-              <span className="text-muted-foreground">Detection source: </span>
+              <span className="text-muted-foreground">{t('deviceManagement.identity.detectionSourceLabel')} </span>
               <span className="font-medium">{identity.source}</span>
             </div>
           </div>
@@ -294,22 +305,21 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
           <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Detected Management Tools</h3>
+          <h3 className="text-sm font-semibold">{t('deviceManagement.toolsTitle')}</h3>
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
-          {totalDetections} tool{totalDetections !== 1 ? 's' : ''} detected across{' '}
-          {populatedCategories.length} categor{populatedCategories.length !== 1 ? 'ies' : 'y'}
+          {t('deviceManagement.toolsSummary', { tools: totalDetections, categories: populatedCategories.length })}
         </p>
 
         {populatedCategories.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No management tools detected on this device.</p>
+          <p className="text-sm text-muted-foreground">{t('deviceManagement.noTools')}</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {populatedCategories.map((catKey) => {
               const detections = categories[catKey]!;
               return (
                 <div key={catKey} className="rounded-md border bg-background p-4">
-                  <h4 className="text-sm font-semibold mb-3">{CATEGORY_LABELS[catKey]}</h4>
+                  <h4 className="text-sm font-semibold mb-3">{categoryLabel(catKey, t)}</h4>
                   <div className="space-y-2">
                     {detections.map((det) => (
                       <div key={det.name} className="flex items-center justify-between gap-2">
@@ -324,7 +334,7 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
                         <span
                           className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-semibold capitalize ${STATUS_BADGE[det.status]}`}
                         >
-                          {det.status}
+                          {statusLabel(det.status, t)}
                         </span>
                       </div>
                     ))}
@@ -339,7 +349,7 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
       {/* ── Scan Errors ───────────────────────────────────────────── */}
       {posture.errors && posture.errors.length > 0 && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
-          <h4 className="text-sm font-semibold text-amber-800 mb-2">Scan Warnings</h4>
+          <h4 className="text-sm font-semibold text-amber-800 mb-2">{t('deviceManagement.scanWarnings')}</h4>
           <ul className="list-disc list-inside space-y-1">
             {posture.errors.map((err) => (
               <li key={err} className="text-xs text-amber-700">
@@ -354,9 +364,9 @@ export default function DeviceManagementTab({ deviceId }: DeviceManagementTabPro
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Clock className="h-3.5 w-3.5" />
-          Last scanned: {formatDateTime(posture.collectedAt)}
+          {t('deviceManagement.lastScanned', { date: formatDateTime(posture.collectedAt, locale) })}
         </span>
-        <span>Scan duration: {posture.scanDurationMs}ms</span>
+        <span>{t('deviceManagement.scanDuration', { duration: posture.scanDurationMs })}</span>
       </div>
     </div>
   );

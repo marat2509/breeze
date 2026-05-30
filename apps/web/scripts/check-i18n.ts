@@ -87,6 +87,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/DeviceInfoTab.tsx',
   'src/components/devices/DeviceSettingsModal.tsx',
   'src/components/devices/DeviceList.tsx',
+  'src/components/devices/DeviceManagementTab.tsx',
   'src/components/devices/DevicesPage.tsx',
   'src/components/devices/MacOSPermissionsBanner.tsx',
   'src/components/devices/MacOSPermissionsCard.tsx',
