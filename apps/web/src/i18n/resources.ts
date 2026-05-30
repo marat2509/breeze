@@ -839,6 +839,20 @@ export const resources = {
         fetch: 'Failed to fetch network connections',
       },
     },
+    deviceAlertHistory: {
+      loading: 'Loading alert history...',
+      retry: 'Retry',
+      title: 'Alert History',
+      rangeSeparator: 'to',
+      apply: 'Apply',
+      clear: 'Clear',
+      empty: 'No alerts reported for this device.',
+      fallbackAlert: 'Alert reported',
+      notReported: 'Not reported',
+      errors: {
+        fetch: 'Failed to fetch alert history',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -2145,6 +2159,20 @@ export const resources = {
       empty: 'Активные сетевые подключения не переданы.',
       errors: {
         fetch: 'Не удалось загрузить сетевые подключения',
+      },
+    },
+    deviceAlertHistory: {
+      loading: 'Загрузка истории оповещений...',
+      retry: 'Повторить',
+      title: 'История оповещений',
+      rangeSeparator: 'по',
+      apply: 'Применить',
+      clear: 'Очистить',
+      empty: 'Оповещения по этому устройству не зарегистрированы.',
+      fallbackAlert: 'Оповещение зарегистрировано',
+      notReported: 'Не сообщалось',
+      errors: {
+        fetch: 'Не удалось загрузить историю оповещений',
       },
     },
     scripts: {

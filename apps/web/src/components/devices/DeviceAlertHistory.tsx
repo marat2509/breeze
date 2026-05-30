@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 
 type AlertItem = {
   id?: string;
@@ -27,10 +29,10 @@ const severityStyles: Record<string, string> = {
   info: 'bg-blue-500/20 text-blue-700 border-blue-500/40'
 };
 
-function formatDateTime(value?: string, timezone?: string) {
-  if (!value) return 'Not reported';
+function formatDateTime(value: string | undefined, timezone: string | undefined, locale: Locale, notReported: string) {
+  if (!value) return notReported;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString([], timezone ? { timeZone: timezone } : undefined);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, timezone ? { timeZone: timezone } : undefined);
 }
 
 export default function DeviceAlertHistory({
@@ -39,6 +41,7 @@ export default function DeviceAlertHistory({
   showFilters = true,
   limit
 }: DeviceAlertHistoryProps) {
+  const { locale, t } = useI18n();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -60,19 +63,19 @@ export default function DeviceAlertHistory({
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
       const response = await fetchWithAuth(`/devices/${deviceId}/alerts?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch alert history');
+      if (!response.ok) throw new Error(t('deviceAlertHistory.errors.fetch'));
       const json = await response.json();
       const payload = json?.data ?? json;
       setAlerts(Array.isArray(payload) ? payload : []);
       if (json?.timezone || json?.siteTimezone) {
         setSiteTimezone(json.timezone ?? json.siteTimezone);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch alert history');
+    } catch {
+      setError(t('deviceAlertHistory.errors.fetch'));
     } finally {
       setLoading(false);
     }
-  }, [appliedRange.endDate, appliedRange.startDate, deviceId]);
+  }, [appliedRange.endDate, appliedRange.startDate, deviceId, t]);
 
   useEffect(() => {
     fetchAlerts();
@@ -101,7 +104,7 @@ export default function DeviceAlertHistory({
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading alert history...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceAlertHistory.loading')}</p>
         </div>
       </div>
     );
@@ -116,7 +119,7 @@ export default function DeviceAlertHistory({
           onClick={() => fetchAlerts()}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceAlertHistory.retry')}
         </button>
       </div>
     );
@@ -127,7 +130,7 @@ export default function DeviceAlertHistory({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Alert History</h3>
+          <h3 className="text-lg font-semibold">{t('deviceAlertHistory.title')}</h3>
         </div>
         {showFilters && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -140,7 +143,7 @@ export default function DeviceAlertHistory({
                 className="h-9 rounded-md border bg-background pl-8 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <span className="text-xs text-muted-foreground">to</span>
+            <span className="text-xs text-muted-foreground">{t('deviceAlertHistory.rangeSeparator')}</span>
             <div className="relative">
               <Calendar className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -155,21 +158,21 @@ export default function DeviceAlertHistory({
               onClick={handleApply}
               className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Apply
+              {t('deviceAlertHistory.apply')}
             </button>
             <button
               type="button"
               onClick={handleClear}
               className="h-9 rounded-md border px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
-              Clear
+              {t('deviceAlertHistory.clear')}
             </button>
           </div>
         )}
       </div>
       <div className="mt-4 space-y-3">
         {visibleAlerts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No alerts reported for this device.</p>
+          <p className="text-sm text-muted-foreground">{t('deviceAlertHistory.empty')}</p>
         ) : (
           visibleAlerts.map((alert, index) => {
             const severity = (alert.severity || alert.level || 'info').toLowerCase();
@@ -178,9 +181,14 @@ export default function DeviceAlertHistory({
               <div key={alert.id ?? `${alert.message ?? alert.summary ?? 'alert'}-${index}`} className="rounded-md border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium">{alert.message || alert.summary || 'Alert reported'}</p>
+                    <p className="text-sm font-medium">{alert.message || alert.summary || t('deviceAlertHistory.fallbackAlert')}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(alert.createdAt || alert.timestamp, effectiveTimezone)}
+                      {formatDateTime(
+                        alert.createdAt || alert.timestamp,
+                        effectiveTimezone,
+                        locale,
+                        t('deviceAlertHistory.notReported'),
+                      )}
                     </p>
                   </div>
                   <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${badgeStyle}`}>
