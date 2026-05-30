@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Cpu, HardDrive, MemoryStick, Network } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
 import DeviceWarrantyCard from './DeviceWarrantyCard';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 type DiskDrive = {
   id?: string;
@@ -58,6 +60,8 @@ type DeviceHardwareInventoryProps = {
   deviceId: string;
 };
 
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
+
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -67,45 +71,51 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function formatGb(value: number | null | undefined): string {
-  if (value === null || value === undefined) return 'Not reported';
+function formatGb(value: number | null | undefined, t: Translate): string {
+  if (value === null || value === undefined) return t('deviceHardware.notReported');
   if (value >= 1024) return `${(value / 1024).toFixed(1)} TB`;
   return `${value.toFixed(1)} GB`;
 }
 
-function formatRam(valueMb: number | null | undefined): string {
-  if (valueMb === null || valueMb === undefined) return 'Not reported';
+function formatRam(valueMb: number | null | undefined, t: Translate): string {
+  if (valueMb === null || valueMb === undefined) return t('deviceHardware.notReported');
   const gb = valueMb / 1024;
   return gb >= 1 ? `${gb.toFixed(1)} GB` : `${valueMb} MB`;
 }
 
-function getHealthBadge(health?: string, status?: string) {
+function getHealthBadge(health: string | undefined, status: string | undefined, t: Translate) {
   const normalized = (health || status || '').toLowerCase();
   if (['healthy', 'ok', 'good', 'normal'].includes(normalized)) {
-    return { label: health || status || 'Healthy', className: 'bg-success/15 text-success border-success/30' };
+    return { label: t('deviceHardware.health.healthy'), className: 'bg-success/15 text-success border-success/30' };
   }
   if (['warning', 'degraded'].includes(normalized)) {
-    return { label: health || status || 'Warning', className: 'bg-warning/15 text-warning border-warning/30' };
+    return { label: t('deviceHardware.health.warning'), className: 'bg-warning/15 text-warning border-warning/30' };
   }
   if (['critical', 'failed', 'error'].includes(normalized)) {
-    return { label: health || status || 'Critical', className: 'bg-destructive/15 text-destructive border-destructive/30' };
+    return { label: t('deviceHardware.health.critical'), className: 'bg-destructive/15 text-destructive border-destructive/30' };
   }
-  return { label: health || status || 'Unknown', className: 'bg-muted/40 text-muted-foreground border-muted' };
+  return { label: health || status || t('deviceHardware.health.unknown'), className: 'bg-muted/40 text-muted-foreground border-muted' };
 }
 
 export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInventoryProps) {
+  const { t } = useI18n();
+  const tRef = useRef(t);
   const [hardware, setHardware] = useState<HardwareInventory | null>(null);
   const [disks, setDisks] = useState<DiskDrive[]>([]);
   const [adapters, setAdapters] = useState<NetworkAdapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const fetchHardware = useCallback(async () => {
     setLoading(true);
     setError(undefined);
     try {
       const response = await fetchWithAuth(`/devices/${deviceId}/hardware`);
-      if (!response.ok) throw new Error('Failed to fetch hardware inventory');
+      if (!response.ok) throw new Error(tRef.current('deviceHardware.errors.fetch'));
       const json: HardwareInventoryResponse & { data?: HardwareInventoryResponse } = await response.json();
       const payload = json?.data ?? json;
       const normalizedHardware = payload.hardware ?? payload;
@@ -116,7 +126,7 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
       setDisks(Array.isArray(diskList) ? diskList : []);
       setAdapters(Array.isArray(adapterList) ? adapterList : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch hardware inventory');
+      setError(err instanceof Error ? err.message : tRef.current('deviceHardware.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -135,14 +145,14 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
 
       return {
         key: disk.id ?? `${disk.name ?? disk.model ?? 'disk'}-${index}`,
-        name: disk.name ?? disk.mountPoint ?? disk.model ?? `Disk ${index + 1}`,
-        sizeLabel: formatGb(sizeGb),
-        usedLabel: usedGb !== null ? formatGb(usedGb) : 'Not reported',
-        percentLabel: computedPercent !== null ? `${computedPercent}%` : 'Not reported',
-        health: getHealthBadge(disk.health, disk.status)
+        name: disk.name ?? disk.mountPoint ?? disk.model ?? t('deviceHardware.diskFallback', { index: index + 1 }),
+        sizeLabel: formatGb(sizeGb, t),
+        usedLabel: usedGb !== null ? formatGb(usedGb, t) : t('deviceHardware.notReported'),
+        percentLabel: computedPercent !== null ? `${computedPercent}%` : t('deviceHardware.notReported'),
+        health: getHealthBadge(disk.health, disk.status, t)
       };
     });
-  }, [disks]);
+  }, [disks, t]);
 
   // Compute total storage from disks
   const totalStorageGb = useMemo(() => {
@@ -168,7 +178,7 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading hardware inventory...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceHardware.loading')}</p>
         </div>
       </div>
     );
@@ -183,7 +193,7 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
           onClick={fetchHardware}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceHardware.retry')}
         </button>
       </div>
     );
@@ -195,52 +205,54 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Cpu className="h-4 w-4" />
-            CPU
+            {t('deviceHardware.cards.cpu')}
           </div>
-          <p className="mt-3 text-lg font-semibold">{hardware?.cpuModel || 'Not reported'}</p>
+          <p className="mt-3 text-lg font-semibold">{hardware?.cpuModel || t('deviceHardware.notReported')}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {hardware?.cpuCores ? `${hardware.cpuCores} cores` : 'Cores not reported'}
-            {hardware?.cpuThreads ? ` • ${hardware.cpuThreads} threads` : ''}
+            {hardware?.cpuCores
+              ? t('deviceHardware.cores', { count: hardware.cpuCores })
+              : t('deviceHardware.coresNotReported')}
+            {hardware?.cpuThreads ? t('deviceHardware.threads', { count: hardware.cpuThreads }) : ''}
           </p>
         </div>
 
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MemoryStick className="h-4 w-4" />
-            Memory
+            {t('deviceHardware.cards.memory')}
           </div>
-          <p className="mt-3 text-lg font-semibold">{formatRam(hardware?.ramTotalMb)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">Total installed RAM</p>
+          <p className="mt-3 text-lg font-semibold">{formatRam(hardware?.ramTotalMb, t)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('deviceHardware.totalRam')}</p>
         </div>
 
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <HardDrive className="h-4 w-4" />
-            Storage
+            {t('deviceHardware.cards.storage')}
           </div>
-          <p className="mt-3 text-lg font-semibold">{formatGb(totalStorageGb)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">Total disk capacity</p>
+          <p className="mt-3 text-lg font-semibold">{formatGb(totalStorageGb, t)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('deviceHardware.totalDisk')}</p>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <h3 className="text-sm font-semibold">Disk Drives</h3>
+          <h3 className="text-sm font-semibold">{t('deviceHardware.diskDrives')}</h3>
           <div className="mt-4 overflow-hidden rounded-md border">
             <table className="min-w-full divide-y">
               <thead className="bg-muted/40">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Drive</th>
-                  <th className="px-4 py-3">Size</th>
-                  <th className="px-4 py-3">Used</th>
-                  <th className="px-4 py-3">Health</th>
+                  <th className="px-4 py-3">{t('deviceHardware.table.drive')}</th>
+                  <th className="px-4 py-3">{t('deviceHardware.table.size')}</th>
+                  <th className="px-4 py-3">{t('deviceHardware.table.used')}</th>
+                  <th className="px-4 py-3">{t('deviceHardware.table.health')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {diskRows.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                      No disk inventory reported.
+                      {t('deviceHardware.emptyDisks')}
                     </td>
                   </tr>
                 ) : (
@@ -263,16 +275,18 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
         </div>
 
         <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <h3 className="text-sm font-semibold">Network Adapters</h3>
+          <h3 className="text-sm font-semibold">{t('deviceHardware.networkAdapters')}</h3>
           <div className="mt-4 space-y-3">
             {adapters.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No network adapters reported.</p>
+              <p className="text-sm text-muted-foreground">{t('deviceHardware.emptyAdapters')}</p>
             ) : (
               adapters.map((adapter, index) => {
-                const name = adapter.name ?? adapter.interfaceName ?? `Adapter ${index + 1}`;
-                const ip = adapter.ipAddress ?? adapter.ip ?? 'Not reported';
-                const mac = adapter.macAddress ?? adapter.mac ?? 'Not reported';
-                const speed = adapter.speedMbps ? `${adapter.speedMbps} Mbps` : 'Speed not reported';
+                const name = adapter.name ?? adapter.interfaceName ?? t('deviceHardware.adapterFallback', { index: index + 1 });
+                const ip = adapter.ipAddress ?? adapter.ip ?? t('deviceHardware.notReported');
+                const mac = adapter.macAddress ?? adapter.mac ?? t('deviceHardware.notReported');
+                const speed = adapter.speedMbps
+                  ? t('deviceHardware.speed', { value: adapter.speedMbps })
+                  : t('deviceHardware.speedNotReported');
                 return (
                   <div key={adapter.id ?? `${name}-${index}`} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
@@ -282,21 +296,21 @@ export default function DeviceHardwareInventory({ deviceId }: DeviceHardwareInve
                       </div>
                       {adapter.isPrimary && (
                         <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                          Primary
+                          {t('deviceHardware.primary')}
                         </span>
                       )}
                     </div>
                     <dl className="mt-3 space-y-1 text-xs text-muted-foreground">
                       <div className="flex justify-between">
-                        <dt>IP Address</dt>
+                        <dt>{t('deviceHardware.ipAddress')}</dt>
                         <dd className="font-mono">{ip}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt>MAC Address</dt>
+                        <dt>{t('deviceHardware.macAddress')}</dt>
                         <dd className="font-mono">{mac}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt>Link Speed</dt>
+                        <dt>{t('deviceHardware.linkSpeed')}</dt>
                         <dd>{speed}</dd>
                       </div>
                     </dl>
