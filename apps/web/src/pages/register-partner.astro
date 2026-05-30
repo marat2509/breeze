@@ -3,6 +3,7 @@ import AuthLayout from '../layouts/AuthLayout.astro';
 import PartnerRegisterPage from '../components/auth/PartnerRegisterPage';
 import { ENABLE_REGISTRATION } from '../lib/featureFlags';
 import { resolveLocaleFromRequest } from '../i18n/locales';
+import { translate } from '../i18n/resources';
 
 const locale = resolveLocaleFromRequest(Astro.request);
 
@@ -11,6 +12,6 @@ if (!ENABLE_REGISTRATION) {
 }
 ---
 
-<AuthLayout title="Register Your Company" locale={locale}>
+<AuthLayout title={translate(locale, 'auth.registerCompany')} locale={locale}>
   <PartnerRegisterPage client:load />
 </AuthLayout>
