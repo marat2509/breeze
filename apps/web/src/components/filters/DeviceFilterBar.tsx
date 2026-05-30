@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, X, Filter, BookmarkIcon } from 'lucide-react';
 import type { FilterConditionGroup, SavedFilter } from '@breeze/shared';
 import { FilterBuilder, DEFAULT_FILTER_FIELDS } from './FilterBuilder';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
 
 interface DeviceFilterBarProps {
   value: FilterConditionGroup | null;
@@ -40,12 +41,16 @@ export function DeviceFilterBar({
   defaultExpanded = false,
   className = ''
 }: DeviceFilterBarProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [savedFiltersLoading, setSavedFiltersLoading] = useState(false);
   const [selectedFilterId, setSelectedFilterId] = useState<string>('');
 
   const conditionCount = value ? countConditions(value) : 0;
+  const activeConditionLabel = conditionCount === 1
+    ? t('filters.deviceBar.conditionActiveOne')
+    : t('filters.deviceBar.conditionActiveMany', { count: conditionCount });
 
   const fetchSavedFilters = useCallback(async () => {
     if (!showSavedFilters) return;
@@ -102,7 +107,7 @@ export function DeviceFilterBar({
             disabled={savedFiltersLoading}
             className="rounded-md border bg-background pl-2 pr-6 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">Saved Filters...</option>
+            <option value="">{t('filters.deviceBar.savedFilters')}</option>
             {savedFilters.map(f => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
@@ -111,7 +116,7 @@ export function DeviceFilterBar({
 
         {conditionCount > 0 && (
           <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-            {conditionCount} condition{conditionCount !== 1 ? 's' : ''} active
+            {activeConditionLabel}
           </span>
         )}
 
@@ -124,7 +129,7 @@ export function DeviceFilterBar({
             className="inline-flex h-7 items-center gap-1 rounded border px-2 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
           >
             <X className="h-3 w-3" />
-            Clear
+            {t('filters.deviceBar.clear')}
           </button>
         )}
 
@@ -137,12 +142,12 @@ export function DeviceFilterBar({
             {expanded ? (
               <>
                 <ChevronUp className="h-3 w-3" />
-                Collapse
+                {t('filters.deviceBar.collapse')}
               </>
             ) : (
               <>
                 <ChevronDown className="h-3 w-3" />
-                Advanced Filter
+                {t('filters.deviceBar.advancedFilter')}
               </>
             )}
           </button>

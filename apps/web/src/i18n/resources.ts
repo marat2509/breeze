@@ -506,6 +506,16 @@ export const resources = {
         invalidNumber: 'Parameter "{{name}}" must be a valid number',
       },
     },
+    filters: {
+      deviceBar: {
+        savedFilters: 'Saved Filters...',
+        conditionActiveOne: '1 condition active',
+        conditionActiveMany: '{{count}} conditions active',
+        clear: 'Clear',
+        collapse: 'Collapse',
+        advancedFilter: 'Advanced Filter',
+      },
+    },
     auth: {
       brandDescription: 'Remote Monitoring & Management',
       tagline: 'The modern RMM platform built for speed, clarity, and scale.',
@@ -1234,6 +1244,16 @@ export const resources = {
         selectPlaceholder: 'Выбрать...',
         required: 'Параметр "{{name}}" обязателен',
         invalidNumber: 'Параметр "{{name}}" должен быть числом',
+      },
+    },
+    filters: {
+      deviceBar: {
+        savedFilters: 'Сохранённые фильтры...',
+        conditionActiveOne: '1 условие активно',
+        conditionActiveMany: '{{count}} условий активно',
+        clear: 'Очистить',
+        collapse: 'Свернуть',
+        advancedFilter: 'Расширенный фильтр',
       },
     },
     auth: {
