@@ -23,6 +23,8 @@ import {
   Usb,
 } from 'lucide-react';
 import { formatUptime } from '../../lib/utils';
+import { formatDate, formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 import type { Device, DeviceStatus, OSType } from './DeviceList';
 import DeviceActions from './DeviceActions';
 import DeviceInfoTab from './DeviceInfoTab';
@@ -88,24 +90,14 @@ const statusColors: Record<DeviceStatus, string> = {
   pending: 'bg-muted text-muted-foreground border-border'
 };
 
-const statusLabels: Record<DeviceStatus, string> = {
-  online: 'Online',
-  offline: 'Offline',
-  maintenance: 'Maintenance',
-  decommissioned: 'Decommissioned',
-  quarantined: 'Quarantined',
-  updating: 'Updating',
-  pending: 'Pending'
-};
-
 const osLabels: Record<OSType, string> = {
   windows: 'Windows',
   macos: 'macOS',
   linux: 'Linux'
 };
 
-function formatOsVersion(os: OSType, osVersion: string): string {
-  if (!osVersion) return osLabels[os];
+function formatOsVersion(osVersion: string, osLabel: string): string {
+  if (!osVersion) return osLabel;
   let v = osVersion;
   // Strip redundant "Microsoft Windows" prefix since osLabels already shows "Windows"
   v = v.replace(/^Microsoft Windows\s*/i, '');
@@ -113,24 +105,19 @@ function formatOsVersion(os: OSType, osVersion: string): string {
   v = v.replace(/^(darwin|linux)\s*/i, '');
   // Strip build/version numbers (e.g. "10.0.26200.7623 Build 26200.7623")
   v = v.replace(/\s*\d+\.\d+\.\d+[\d.]*\s*(Build\s*[\d.]+)?/i, '').trim();
-  return v ? `${osLabels[os]} ${v}` : osLabels[os];
+  return v ? `${osLabel} ${v}` : osLabel;
 }
 
-function formatLastSeen(dateString: string, timezone?: string): string {
+function formatLastSeen(dateString: string, locale: 'en' | 'ru', timezone?: string): string {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
 
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString([], timezone ? { timeZone: timezone } : undefined);
+  if (diffDays < 7) return formatRelativeTime(date, locale, now);
+  return formatDate(date, locale, timezone ? { timeZone: timezone } : undefined);
 }
 
 const VALID_TABS: Tab[] = [
@@ -148,6 +135,7 @@ function getTabFromHash(): Tab {
 }
 
 export default function DeviceDetails({ device, timezone, onBack, onAction }: DeviceDetailsProps) {
+  const { locale, t } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>(getTabFromHash);
 
   useEffect(() => {
@@ -163,33 +151,34 @@ export default function DeviceDetails({ device, timezone, onBack, onAction }: De
 
   // Use provided timezone or browser default
   const effectiveTimezone = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const osLabel = t(`devices.osNames.${device.os}`, undefined, osLabels[device.os]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; separator?: boolean; title?: string }[] = [
     // --- Summary ---
-    { id: 'overview', label: 'Overview', icon: <Monitor className="h-4 w-4" /> },
-    { id: 'details', label: 'Details', icon: <Info className="h-4 w-4" />, title: 'OS, network, and system details' },
+    { id: 'overview', label: t('deviceDetails.tabs.overview'), icon: <Monitor className="h-4 w-4" /> },
+    { id: 'details', label: t('deviceDetails.tabs.details'), icon: <Info className="h-4 w-4" />, title: t('deviceDetails.tabTitles.details') },
     // --- Monitoring ---
-    { id: 'performance', label: 'Performance', icon: <Activity className="h-4 w-4" />, separator: true, title: 'CPU, RAM, and disk usage over time' },
-    { id: 'alerts', label: 'Alerts', icon: <AlertTriangle className="h-4 w-4" />, title: 'Alert history for this device' },
-    { id: 'eventlog', label: 'Event Log', icon: <FileText className="h-4 w-4" />, title: 'Windows/macOS system event logs' },
+    { id: 'performance', label: t('deviceDetails.tabs.performance'), icon: <Activity className="h-4 w-4" />, separator: true, title: t('deviceDetails.tabTitles.performance') },
+    { id: 'alerts', label: t('deviceDetails.tabs.alerts'), icon: <AlertTriangle className="h-4 w-4" />, title: t('deviceDetails.tabTitles.alerts') },
+    { id: 'eventlog', label: t('deviceDetails.tabs.eventlog'), icon: <FileText className="h-4 w-4" />, title: t('deviceDetails.tabTitles.eventlog') },
     // --- Inventory ---
-    { id: 'hardware', label: 'Hardware', icon: <Cpu className="h-4 w-4" />, separator: true },
-    { id: 'software', label: 'Software', icon: <Package className="h-4 w-4" /> },
-    { id: 'patches', label: 'Patches', icon: <CheckCircle className="h-4 w-4" />, title: 'OS update and patch status' },
-    { id: 'peripherals', label: 'Peripherals', icon: <Usb className="h-4 w-4" />, title: 'USB, Bluetooth, and connected devices' },
+    { id: 'hardware', label: t('deviceDetails.tabs.hardware'), icon: <Cpu className="h-4 w-4" />, separator: true },
+    { id: 'software', label: t('deviceDetails.tabs.software'), icon: <Package className="h-4 w-4" /> },
+    { id: 'patches', label: t('deviceDetails.tabs.patches'), icon: <CheckCircle className="h-4 w-4" />, title: t('deviceDetails.tabTitles.patches') },
+    { id: 'peripherals', label: t('deviceDetails.tabs.peripherals'), icon: <Usb className="h-4 w-4" />, title: t('deviceDetails.tabTitles.peripherals') },
     // --- Management ---
-    { id: 'scripts', label: 'Scripts', icon: <Terminal className="h-4 w-4" />, separator: true, title: 'Script execution history' },
-    { id: 'management', label: 'Management', icon: <Server className="h-4 w-4" />, title: 'Agent settings and device management' },
-    { id: 'effective-config', label: 'Config', icon: <Layers className="h-4 w-4" />, title: 'Resolved configuration from all assigned policies' },
-    { id: 'security', label: 'Security', icon: <Shield className="h-4 w-4" /> },
-    { id: 'playbooks', label: 'Playbooks', icon: <Activity className="h-4 w-4" />, title: 'Automated remediation playbook runs' },
+    { id: 'scripts', label: t('deviceDetails.tabs.scripts'), icon: <Terminal className="h-4 w-4" />, separator: true, title: t('deviceDetails.tabTitles.scripts') },
+    { id: 'management', label: t('deviceDetails.tabs.management'), icon: <Server className="h-4 w-4" />, title: t('deviceDetails.tabTitles.management') },
+    { id: 'effective-config', label: t('deviceDetails.tabs.effectiveConfig'), icon: <Layers className="h-4 w-4" />, title: t('deviceDetails.tabTitles.effectiveConfig') },
+    { id: 'security', label: t('deviceDetails.tabs.security'), icon: <Shield className="h-4 w-4" /> },
+    { id: 'playbooks', label: t('deviceDetails.tabs.playbooks'), icon: <Activity className="h-4 w-4" />, title: t('deviceDetails.tabTitles.playbooks') },
     // --- History & Network ---
-    { id: 'activities', label: 'Activities', icon: <ScrollText className="h-4 w-4" />, separator: true, title: 'Audit log for this device' },
-    { id: 'connections', label: 'Connections', icon: <Network className="h-4 w-4" />, title: 'Active network connections' },
-    { id: 'ip-history', label: 'IP History', icon: <Network className="h-4 w-4" />, title: 'Historical public and private IP addresses' },
-    { id: 'filesystem', label: 'Disk Cleanup', icon: <HardDrive className="h-4 w-4" />, title: 'Disk usage analysis and cleanup' },
-    { id: 'boot-performance', label: 'Boot Perf', icon: <Timer className="h-4 w-4" />, title: 'Startup time and boot process analysis' },
-    { id: 'backup', label: 'Backup', icon: <Database className="h-4 w-4" />, title: 'Backup status, jobs, snapshots, and verification' }
+    { id: 'activities', label: t('deviceDetails.tabs.activities'), icon: <ScrollText className="h-4 w-4" />, separator: true, title: t('deviceDetails.tabTitles.activities') },
+    { id: 'connections', label: t('deviceDetails.tabs.connections'), icon: <Network className="h-4 w-4" />, title: t('deviceDetails.tabTitles.connections') },
+    { id: 'ip-history', label: t('deviceDetails.tabs.ipHistory'), icon: <Network className="h-4 w-4" />, title: t('deviceDetails.tabTitles.ipHistory') },
+    { id: 'filesystem', label: t('deviceDetails.tabs.filesystem'), icon: <HardDrive className="h-4 w-4" />, title: t('deviceDetails.tabTitles.filesystem') },
+    { id: 'boot-performance', label: t('deviceDetails.tabs.bootPerformance'), icon: <Timer className="h-4 w-4" />, title: t('deviceDetails.tabTitles.bootPerformance') },
+    { id: 'backup', label: t('deviceDetails.tabs.backup'), icon: <Database className="h-4 w-4" />, title: t('deviceDetails.tabTitles.backup') }
   ];
 
   return (
@@ -204,12 +193,12 @@ export default function DeviceDetails({ device, timezone, onBack, onAction }: De
               <div className="flex items-center gap-3 min-w-0">
                 <h1 className="truncate text-xl font-semibold tracking-tight" title={device.displayName || device.hostname}>{device.displayName || device.hostname}</h1>
                 <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusColors[device.status]}`}>
-                  {statusLabels[device.status]}
+                  {t(`devices.status.${device.status}`, undefined, device.status)}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span>{formatOsVersion(device.os, device.osVersion)}</span>
-                <span>Agent v{device.agentVersion}</span>
+                <span>{formatOsVersion(device.osVersion, osLabel)}</span>
+                <span>{t('deviceDetails.agentVersion', { version: device.agentVersion })}</span>
                 <span>{device.siteName}</span>
               </div>
             </div>
@@ -229,35 +218,35 @@ export default function DeviceDetails({ device, timezone, onBack, onAction }: De
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Cpu className="h-3.5 w-3.5" />
-                  CPU
+                  {t('deviceDetails.overview.cpu')}
                 </div>
                 <p className="mt-1 text-lg font-semibold tabular-nums">{device.cpuPercent.toFixed(1)}%</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <MemoryStick className="h-3.5 w-3.5" />
-                  RAM
+                  {t('deviceDetails.overview.ram')}
                 </div>
                 <p className="mt-1 text-lg font-semibold tabular-nums">{device.ramPercent.toFixed(1)}%</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  Last Seen
+                  {t('deviceDetails.overview.lastSeen')}
                 </div>
-                <p className="mt-1 text-lg font-semibold">{formatLastSeen(device.lastSeen, effectiveTimezone)}</p>
+                <p className="mt-1 text-lg font-semibold">{formatLastSeen(device.lastSeen, locale, effectiveTimezone)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  Uptime
+                  {t('deviceDetails.overview.uptime')}
                 </div>
                 <p className="mt-1 text-lg font-semibold">{formatUptime(device.uptimeSeconds)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
-                  Logged-in User
+                  {t('deviceDetails.overview.loggedInUser')}
                 </div>
                 <p className="mt-1 text-lg font-semibold truncate" title={device.lastUser || undefined}>{device.lastUser || '—'}</p>
               </div>
