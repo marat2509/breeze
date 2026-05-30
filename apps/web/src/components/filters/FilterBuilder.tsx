@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, ChevronDown, ChevronRight, GripVertical, RefreshCw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type {
   FilterCondition,
   FilterConditionGroup,
   FilterFieldDefinition,
-  FilterOperator,
-  FilterValue,
   FilterPreviewResult
 } from '@breeze/shared';
 import { ConditionRow } from './ConditionRow';
 import { ConditionGroup } from './ConditionGroup';
 import { FilterPreview } from './FilterPreview';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
 
 // Default filter fields - these will be fetched from the API in production
 const DEFAULT_FILTER_FIELDS: FilterFieldDefinition[] = [
@@ -100,6 +99,7 @@ export function FilterBuilder({
   previewDebounceMs = 500,
   className = ''
 }: FilterBuilderProps) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<FilterPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -131,17 +131,17 @@ export function FilterBuilder({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch preview');
+        throw new Error(t('filters.builder.previewFailed'));
       }
 
       const data = await response.json();
       setPreview(data);
     } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : 'Failed to fetch preview');
+      setPreviewError(err instanceof Error ? err.message : t('filters.builder.previewFailed'));
     } finally {
       setPreviewLoading(false);
     }
-  }, [showPreview]);
+  }, [showPreview, t]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -190,14 +190,14 @@ export function FilterBuilder({
       <div className="rounded-lg border bg-card p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Match</span>
+            <span className="text-sm font-medium">{t('filters.builder.match')}</span>
             <select
               value={value.operator}
               onChange={(e) => handleOperatorChange(e.target.value as 'AND' | 'OR')}
               className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="AND">All conditions (AND)</option>
-              <option value="OR">Any condition (OR)</option>
+              <option value="AND">{t('filters.builder.allConditions')}</option>
+              <option value="OR">{t('filters.builder.anyCondition')}</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -207,7 +207,7 @@ export function FilterBuilder({
               className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium transition hover:bg-muted"
             >
               <Plus className="h-3 w-3" />
-              Add Condition
+              {t('filters.builder.addCondition')}
             </button>
             <button
               type="button"
@@ -215,7 +215,7 @@ export function FilterBuilder({
               className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium transition hover:bg-muted"
             >
               <Plus className="h-3 w-3" />
-              Add Group
+              {t('filters.builder.addGroup')}
             </button>
           </div>
         </div>

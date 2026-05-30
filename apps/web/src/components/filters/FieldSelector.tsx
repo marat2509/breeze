@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import type { FilterFieldDefinition, FilterFieldCategory } from '@breeze/shared';
+import { useI18n } from '@/i18n/react';
 
 interface FieldSelectorProps {
   value: string;
@@ -33,12 +34,17 @@ const CATEGORY_ORDER: FilterFieldCategory[] = [
   'computed'
 ];
 
+function fieldI18nKey(key: string): string {
+  return key.replace(/\./g, '_');
+}
+
 export function FieldSelector({
   value,
   onChange,
   fields,
   className = ''
 }: FieldSelectorProps) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -48,10 +54,18 @@ export function FieldSelector({
     return fields.find(f => f.key === value);
   }, [fields, value]);
 
+  const getFieldLabel = useCallback((field: FilterFieldDefinition) =>
+    t(`filters.fieldLabels.${fieldI18nKey(field.key)}`, undefined, field.label), [t]);
+
+  const getFieldDescription = useCallback((field: FilterFieldDefinition) =>
+    field.description
+      ? t(`filters.fieldDescriptions.${fieldI18nKey(field.key)}`, undefined, field.description)
+      : undefined, [t]);
+
   const groupedFields = useMemo(() => {
     const filtered = searchQuery
       ? fields.filter(f =>
-          f.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          getFieldLabel(f).toLowerCase().includes(searchQuery.toLowerCase()) ||
           f.key.toLowerCase().includes(searchQuery.toLowerCase())
         )
       : fields;
@@ -65,7 +79,7 @@ export function FieldSelector({
     }
 
     return groups;
-  }, [fields, searchQuery]);
+  }, [fields, searchQuery, getFieldLabel]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -100,7 +114,9 @@ export function FieldSelector({
         onClick={() => setIsOpen(!isOpen)}
         className="flex w-48 items-center justify-between rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
       >
-        <span className="truncate">{selectedField?.label || 'Select field'}</span>
+        <span className="truncate">
+          {selectedField ? getFieldLabel(selectedField) : t('filters.fieldSelector.selectField')}
+        </span>
         <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
       </button>
 
@@ -114,7 +130,7 @@ export function FieldSelector({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search fields..."
+                placeholder={t('filters.fieldSelector.searchFields')}
                 className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
@@ -123,7 +139,7 @@ export function FieldSelector({
           <div className="max-h-72 overflow-y-auto p-1">
             {groupedFields.size === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
-                No fields match your search
+                {t('filters.fieldSelector.noFields')}
               </div>
             ) : (
               CATEGORY_ORDER.map((category) => {
@@ -133,32 +149,35 @@ export function FieldSelector({
                 return (
                   <div key={category}>
                     <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                      {CATEGORY_LABELS[category]}
+                      {t(`filters.categories.${category}`, undefined, CATEGORY_LABELS[category])}
                     </div>
-                    {categoryFields.map((field) => (
-                      <button
-                        key={field.key}
-                        type="button"
-                        onClick={() => handleSelect(field.key)}
-                        className={`flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
-                          field.key === value ? 'bg-muted' : ''
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{field.label}</div>
-                          {field.description && (
-                            <div className="text-xs text-muted-foreground truncate">
-                              {field.description}
-                            </div>
+                    {categoryFields.map((field) => {
+                      const description = getFieldDescription(field);
+                      return (
+                        <button
+                          key={field.key}
+                          type="button"
+                          onClick={() => handleSelect(field.key)}
+                          className={`flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                            field.key === value ? 'bg-muted' : ''
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{getFieldLabel(field)}</div>
+                            {description && (
+                              <div className="text-xs text-muted-foreground truncate">
+                                {description}
+                              </div>
+                            )}
+                          </div>
+                          {field.computed && (
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {t('filters.fieldSelector.computed')}
+                            </span>
                           )}
-                        </div>
-                        {field.computed && (
-                          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            Computed
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 );
               })

@@ -86,7 +86,14 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/DeviceList.tsx',
   'src/components/devices/DevicesPage.tsx',
   'src/components/devices/ScriptPickerModal.tsx',
+  'src/components/filters/ConditionGroup.tsx',
+  'src/components/filters/ConditionRow.tsx',
   'src/components/filters/DeviceFilterBar.tsx',
+  'src/components/filters/FieldSelector.tsx',
+  'src/components/filters/FilterBuilder.tsx',
+  'src/components/filters/FilterPreview.tsx',
+  'src/components/filters/OperatorSelector.tsx',
+  'src/components/filters/ValueInput.tsx',
   'src/components/scripts/ScriptParametersForm.tsx',
   'src/components/auth/MFAVerifyForm.tsx',
   'src/components/layout/CommandPalette.tsx',
@@ -125,7 +132,7 @@ function stripExpressions(value: string): string {
 }
 
 function checkHardcodedUiText(root: string, errors: string[]) {
-  const jsxTextPattern = />\s*([A-ZА-Я][^<>{}]*[a-zа-я][^<>{}]*)\s*</g;
+  const jsxTextPattern = /(?<!=)>\s*([A-ZА-Я][^<>{}]*[a-zа-я][^<>{}]*)\s*</g;
   const attrPattern = /\b(?:aria-label|title|placeholder)\s*=\s*["']([^"']*[A-Za-zА-Яа-я][^"']*)["']/g;
 
   for (const relative of HARD_CODED_SCAN_FILES) {
