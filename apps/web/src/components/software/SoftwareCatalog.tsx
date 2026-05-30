@@ -5,7 +5,8 @@ import {
   X,
   Rocket,
   Plus,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
@@ -38,11 +39,13 @@ export default function SoftwareCatalog() {
   const [selectedSoftware, setSelectedSoftware] = useState<SoftwareItem | null>(null);
   const [showDeployWizard, setShowDeployWizard] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SoftwareItem | null>(null);
   const [detailTab, setDetailTab] = useState<'details' | 'versions'>('details');
   const [catalogItems, setCatalogItems] = useState<SoftwareItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({
     name: '',
     vendor: '',
@@ -134,6 +137,31 @@ export default function SoftwareCatalog() {
       setError(err instanceof Error ? err.message : 'Failed to add package');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeletePackage = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      setDeletingId(deleteTarget.id);
+      setError(undefined);
+      const response = await fetchWithAuth(`/software/catalog/${deleteTarget.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error ?? 'Failed to delete package');
+      }
+
+      setCatalogItems(prev => prev.filter(item => item.id !== deleteTarget.id));
+      setSelectedSoftware(prev => prev?.id === deleteTarget.id ? null : prev);
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete package');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -258,7 +286,20 @@ export default function SoftwareCatalog() {
                 <p className="mt-3 text-xs text-muted-foreground line-clamp-2">{item.description}</p>
               )}
 
-              <div className="mt-4 flex items-center justify-end">
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  aria-label={`Delete ${item.name}`}
+                  title={`Delete ${item.name}`}
+                  onClick={event => {
+                    event.stopPropagation();
+                    setDeleteTarget(item);
+                  }}
+                  disabled={deletingId === item.id}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={event => {
@@ -342,7 +383,16 @@ export default function SoftwareCatalog() {
                     {selectedSoftware.description}
                   </div>
                 )}
-                <div className="mt-5 flex items-center justify-end">
+                <div className="mt-5 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(selectedSoftware)}
+                    disabled={deletingId === selectedSoftware.id}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-destructive/40 px-4 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -362,6 +412,49 @@ export default function SoftwareCatalog() {
                 <SoftwareVersionManager catalogId={selectedSoftware.id} />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Delete Software Package</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Delete <span className="font-medium text-foreground">{deleteTarget.name}</span> from the Software Library?
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close delete confirmation"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId === deleteTarget.id}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId === deleteTarget.id}
+                className="inline-flex h-9 items-center justify-center rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePackage}
+                disabled={deletingId === deleteTarget.id}
+                className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete package'}
+              </button>
+            </div>
           </div>
         </div>
       )}
