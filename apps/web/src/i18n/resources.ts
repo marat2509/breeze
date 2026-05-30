@@ -740,6 +740,13 @@ export const resources = {
           remoteDesktop: 'Remote Desktop permission is required for unattended login-window access on macOS 14+.',
           autoConfigure: 'Screen Recording and Accessibility are being configured automatically. If this persists, check agent logs or restart the agent.',
         },
+        banner: {
+          fullDiskAccessRequired: 'Full Disk Access Required',
+          remoteDesktopPermissionRequired: 'Remote Desktop Permission Required',
+          permissionsConfiguring: 'Permissions Configuring',
+          fullDiskAccessMessage: 'Full Disk Access is required. Grant it in System Settings > Privacy & Security > Full Disk Access. Screen Recording and Accessibility will be configured automatically.',
+          remoteDesktopMessage: 'macOS Remote Desktop permission is missing. The login-window desktop path will stay unavailable until it is granted.',
+        },
         lastChecked: 'Last checked: {{date}}',
       },
       messages: {
@@ -1965,6 +1972,13 @@ export const resources = {
           fullDiskAccess: 'Полный доступ к диску нужно выдать в System Settings > Privacy & Security. Запись экрана и универсальный доступ будут настроены автоматически.',
           remoteDesktop: 'Разрешение Remote Desktop требуется для unattended-доступа к экрану входа на macOS 14+.',
           autoConfigure: 'Запись экрана и универсальный доступ настраиваются автоматически. Если это не проходит, проверьте логи агента или перезапустите агент.',
+        },
+        banner: {
+          fullDiskAccessRequired: 'Требуется полный доступ к диску',
+          remoteDesktopPermissionRequired: 'Требуется разрешение Remote Desktop',
+          permissionsConfiguring: 'Разрешения настраиваются',
+          fullDiskAccessMessage: 'Полный доступ к диску обязателен. Выдайте его в System Settings > Privacy & Security > Full Disk Access. Запись экрана и универсальный доступ будут настроены автоматически.',
+          remoteDesktopMessage: 'Разрешение macOS Remote Desktop отсутствует. Доступ к рабочему столу на экране входа останется недоступен, пока разрешение не будет выдано.',
         },
         lastChecked: 'Последняя проверка: {{date}}',
       },

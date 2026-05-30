@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, XCircle } from 'lucide-react';
 import type { TCCPermissions } from '@breeze/shared';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
 
 const POLL_INTERVAL_MISSING = 30_000;  // 30s when any permission is missing
 const POLL_INTERVAL_GRANTED = 300_000; // 5 min when all granted
@@ -21,6 +22,7 @@ type MacOSPermissionsBannerProps = {
  * after the user grants FDA in System Settings.
  */
 export default function MacOSPermissionsBanner({ deviceId, osType }: MacOSPermissionsBannerProps) {
+  const { t } = useI18n();
   const [tcc, setTcc] = useState<TCCPermissions | null>(null);
 
   const fetchTcc = useCallback(() => {
@@ -76,27 +78,31 @@ export default function MacOSPermissionsBanner({ deviceId, osType }: MacOSPermis
       <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0 text-amber-600" />
       <div className="min-w-0">
         <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-          {fdaMissing ? 'Full Disk Access Required' : remoteDesktopMissing ? 'Remote Desktop Permission Required' : 'Permissions Configuring'}
+          {fdaMissing
+            ? t('deviceInfo.macosPermissions.banner.fullDiskAccessRequired')
+            : remoteDesktopMissing
+              ? t('deviceInfo.macosPermissions.banner.remoteDesktopPermissionRequired')
+              : t('deviceInfo.macosPermissions.banner.permissionsConfiguring')}
         </p>
         <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
           {fdaMissing
-            ? 'Full Disk Access is required. Grant it in System Settings > Privacy & Security > Full Disk Access. Screen Recording and Accessibility will be configured automatically.'
+            ? t('deviceInfo.macosPermissions.banner.fullDiskAccessMessage')
             : remoteDesktopMissing
-              ? 'macOS Remote Desktop permission is missing. The login-window desktop path will stay unavailable until it is granted.'
-            : 'Screen Recording and Accessibility are being configured automatically. If this persists, check agent logs or restart the agent.'}
+              ? t('deviceInfo.macosPermissions.banner.remoteDesktopMessage')
+              : t('deviceInfo.macosPermissions.warnings.autoConfigure')}
         </p>
         {(fdaMissing || remoteDesktopMissing) && (
           <div className="mt-2 flex flex-wrap gap-2">
             {fdaMissing && (
               <span className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                 <XCircle className="h-3 w-3" />
-                Full Disk Access
+                {t('deviceInfo.macosPermissions.permissions.fullDiskAccess')}
               </span>
             )}
             {remoteDesktopMissing && (
               <span className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                 <XCircle className="h-3 w-3" />
-                Remote Desktop
+                {t('deviceInfo.macosPermissions.permissions.remoteDesktop')}
               </span>
             )}
           </div>
