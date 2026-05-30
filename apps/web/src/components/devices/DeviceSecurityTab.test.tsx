@@ -14,6 +14,30 @@ vi.mock('../../stores/auth', () => ({
 
 const fetchWithAuthMock = vi.mocked(fetchWithAuth);
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500): Response =>
   ({
     ok,
@@ -27,6 +51,13 @@ const deviceId = '11111111-1111-1111-1111-111111111111';
 describe('DeviceSecurityTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    window.localStorage.setItem('breeze_locale', 'en');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
 
     fetchWithAuthMock.mockImplementation(async (input, init) => {
       const url = String(input);
@@ -131,5 +162,25 @@ describe('DeviceSecurityTab', () => {
     await waitFor(() => {
       expect(fetchWithAuthMock).toHaveBeenCalledWith('/security/threats/thr-1/quarantine', expect.objectContaining({ method: 'POST' }));
     });
+  });
+
+  it('renders Russian security operations, threat, and scan labels', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+
+    render(<DeviceSecurityTab deviceId={deviceId} />);
+
+    expect(await screen.findByText('Операции безопасности')).toBeInTheDocument();
+    expect(screen.getByText('Запускайте сканирования и просматривайте последние события обнаружения на этом устройстве.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Запустить полное сканирование/i })).toBeInTheDocument();
+    expect(screen.getByText('Последние угрозы')).toBeInTheDocument();
+    expect(screen.getByText('Критическая')).toBeInTheDocument();
+    expect(screen.getByText('Активна')).toBeInTheDocument();
+    expect(screen.getByText(/Обнаружено:/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Карантин/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Удалить/i })).toBeInTheDocument();
+    expect(screen.getByText('Последние сканирования')).toBeInTheDocument();
+    expect(screen.getByText('Быстрое сканирование')).toBeInTheDocument();
+    expect(screen.getByText('Завершено')).toBeInTheDocument();
+    expect(screen.getByText(/Найдено угроз: 1/)).toBeInTheDocument();
   });
 });
