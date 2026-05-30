@@ -39,8 +39,39 @@ const device: Device = {
 const SITE_A = { id: 'site-a', orgId: 'org-1', name: 'HQ' };
 const SITE_B = { id: 'site-b', orgId: 'org-1', name: 'Branch' };
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 describe('ChangeSiteModal', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    window.localStorage.setItem('breeze_locale', 'en');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
     vi.clearAllMocks();
   });
 
@@ -123,5 +154,22 @@ describe('ChangeSiteModal', () => {
     expect(await screen.findByText(/target site not found/i)).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('renders Russian labels from the selected locale', async () => {
+    fetchWithAuthMock.mockResolvedValue(makeJsonResponse({ data: [SITE_A, SITE_B] }));
+    window.localStorage.setItem('breeze_locale', 'ru');
+
+    render(
+      <ChangeSiteModal device={device} isOpen onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Смена сайта' })).toBeDefined();
+    expect(screen.getByText('Смена сайта')).toBeDefined();
+    expect(screen.getByText('Текущий сайт')).toBeDefined();
+    expect(await screen.findByLabelText('Новый сайт')).toBeDefined();
+    expect(screen.getByText('HQ (текущий)')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Отмена' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Переместить устройство' })).toBeDisabled();
   });
 });

@@ -3,7 +3,8 @@ import { X, Loader2, MapPin } from 'lucide-react';
 import type { Device } from './DeviceList';
 import { Dialog } from '../shared/Dialog';
 import { fetchWithAuth } from '../../stores/auth';
-import { extractApiError } from '@/lib/apiError';
+import { extractLocalizedApiError } from '@/lib/apiError';
+import { useI18n } from '@/i18n/react';
 
 type Site = {
   id: string;
@@ -19,6 +20,7 @@ type ChangeSiteModalProps = {
 };
 
 export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: ChangeSiteModalProps) {
+  const { locale, t } = useI18n();
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState(device.siteId);
   const [loading, setLoading] = useState(false);
@@ -35,7 +37,7 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
     // Fetch only sites in the device's org — the API rejects cross-org moves,
     // so listing other orgs' sites would just create a dead-end choice.
     fetchWithAuth(`/orgs/sites?organizationId=${device.orgId}`)
-      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load sites')))
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(t('devices.changeSiteModal.loadSitesFailed'))))
       .then(data => {
         const list: Site[] = Array.isArray(data?.data)
           ? data.data
@@ -48,10 +50,10 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
       })
       .catch(err => {
         setSites([]);
-        setError(err instanceof Error ? err.message : 'Failed to load sites');
+        setError(err instanceof Error ? err.message : t('devices.changeSiteModal.loadSitesFailed'));
       })
       .finally(() => setLoading(false));
-  }, [isOpen, device.orgId, device.siteId]);
+  }, [isOpen, device.orgId, device.siteId, t]);
 
   const handleSave = async () => {
     if (siteId === device.siteId) {
@@ -71,13 +73,13 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(extractApiError(data, 'Failed to change site'));
+        throw new Error(extractLocalizedApiError(data, t('devices.changeSiteModal.changeFailed'), locale));
       }
 
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change site');
+      setError(err instanceof Error ? err.message : t('devices.changeSiteModal.changeFailed'));
     } finally {
       setSaving(false);
     }
@@ -86,20 +88,23 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
   const currentSiteName = sites.find(s => s.id === device.siteId)?.name ?? device.siteName;
   const selectionChanged = siteId !== device.siteId;
   const onlyOneSite = sites.length === 1 && sites[0]?.id === device.siteId;
+  const title = t('devices.changeSiteModal.title');
+  const deviceName = device.displayName || device.hostname;
 
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Change Site" className="p-6" maxWidth="md">
+    <Dialog open={isOpen} onClose={onClose} title={title} className="p-6" maxWidth="md">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-4 w-4 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold">Change Site</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
+          aria-label={t('common.dismiss')}
           className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted disabled:cursor-not-allowed"
         >
           <X className="h-4 w-4" />
@@ -107,28 +112,27 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Move <span className="font-medium text-foreground">{device.displayName || device.hostname}</span>{' '}
-        to a different site within <span className="font-medium text-foreground">{device.orgName}</span>.
+        {t('devices.changeSiteModal.description', { device: deviceName, org: device.orgName })}
       </p>
 
       <div className="mt-5 space-y-4">
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Current site</label>
+          <label className="text-xs font-medium text-muted-foreground">{t('devices.changeSiteModal.currentSite')}</label>
           <p className="mt-1 text-sm">{currentSiteName || '—'}</p>
         </div>
 
         <div>
           <label htmlFor="change-site-select" className="text-xs font-medium text-muted-foreground">
-            New site
+            {t('devices.changeSiteModal.newSite')}
           </label>
           {loading ? (
             <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading sites...
+              {t('devices.changeSiteModal.loadingSites')}
             </div>
           ) : onlyOneSite ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              This organization only has one site. Add more sites from Settings → Organizations to enable moves.
+              {t('devices.changeSiteModal.onlyOneSite')}
             </p>
           ) : (
             <select
@@ -141,7 +145,7 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
               {sites.map(site => (
                 <option key={site.id} value={site.id}>
                   {site.name}
-                  {site.id === device.siteId ? ' (current)' : ''}
+                  {site.id === device.siteId ? t('devices.changeSiteModal.currentSuffix') : ''}
                 </option>
               ))}
             </select>
@@ -162,7 +166,7 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
           disabled={saving}
           className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           type="button"
@@ -173,10 +177,10 @@ export default function ChangeSiteModal({ device, isOpen, onClose, onSaved }: Ch
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Moving...
+              {t('devices.changeSiteModal.moving')}
             </>
           ) : (
-            'Move device'
+            t('devices.changeSiteModal.moveDevice')
           )}
         </button>
       </div>

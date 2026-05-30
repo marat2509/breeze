@@ -77,6 +77,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/auth/LoginForm.tsx',
   'src/components/auth/LoginPage.tsx',
   'src/components/devices/AddDeviceModal.tsx',
+  'src/components/devices/ChangeSiteModal.tsx',
   'src/components/devices/DeviceCard.tsx',
   'src/components/devices/DeviceSettingsModal.tsx',
   'src/components/devices/DeviceList.tsx',
