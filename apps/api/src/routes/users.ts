@@ -478,11 +478,18 @@ userRoutes.patch('/me', zValidator('json', updateMeSchema), async (c) => {
       }
       const prefs = body.preferences as Record<string, unknown>;
       const validThemes = ['light', 'dark', 'system'];
+      const validLocales = ['en', 'ru'];
       if (
         typeof prefs.theme === 'string'
         && !validThemes.includes(prefs.theme)
       ) {
         return c.json({ error: 'Invalid theme value. Must be light, dark, or system.' }, 400);
+      }
+      if (
+        typeof prefs.locale === 'string'
+        && !validLocales.includes(prefs.locale)
+      ) {
+        return c.json({ error: 'Invalid locale value. Must be en or ru.' }, 400);
       }
       updates.preferences = prefs;
     } else if (body.preferences === null) {

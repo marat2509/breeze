@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { extractApiError } from '@/lib/apiError';
+import { syncLocaleFromPreference } from '@/i18n/client';
 
 export interface UserPreferences {
   theme?: 'light' | 'dark' | 'system';
+  locale?: 'en' | 'ru';
 }
 
 export interface User {
@@ -618,6 +620,7 @@ export async function fetchAndApplyPreferences(): Promise<void> {
     if (data.preferences) {
       useAuthStore.getState().updateUser({ preferences: data.preferences });
       applyThemePreference(data.preferences.theme);
+      syncLocaleFromPreference(data.preferences.locale);
     }
   } catch {
     // Non-critical — localStorage still has the cached theme

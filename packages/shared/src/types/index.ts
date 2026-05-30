@@ -590,7 +590,7 @@ export interface PartnerSettings {
   timezone?: string;
   dateFormat?: DateFormat;
   timeFormat?: TimeFormat;
-  language?: 'en';
+  language?: 'en' | 'ru';
   businessHours?: {
     preset: BusinessHoursPreset;
     custom?: Record<string, DaySchedule>;

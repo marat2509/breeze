@@ -6,6 +6,7 @@
 // this function picks the most readable rendering of whatever we got.
 
 type ZodIssue = { message?: string; path?: Array<string | number> };
+type UiLocale = 'en' | 'ru';
 
 function joinZodIssues(issues: unknown): string | null {
   if (!Array.isArray(issues) || issues.length === 0) return null;
@@ -68,6 +69,26 @@ export function extractApiError(data: unknown, fallback: string): string {
   }
 
   return parts.length > 0 ? parts.join(': ') : fallback;
+}
+
+const RU_KNOWN_ERROR_PATTERNS: Array<[RegExp, string]> = [
+  [/session expired|sign in again|login again|unauthorized|401/i, 'Сессия истекла. Войдите снова.'],
+  [/network error|failed to fetch|networkerror|err_connection/i, 'Ошибка сети. Проверьте подключение и повторите попытку.'],
+  [/forbidden|permission|access denied|403/i, 'У вас нет прав для выполнения этого действия.'],
+  [/too many requests|rate.?limited|429/i, 'Слишком много запросов. Подождите немного и повторите попытку.'],
+  [/server error|internal server error|5\d\d/i, 'Ошибка сервера. Повторите попытку позже.'],
+  [/invalid response|unexpected token|json/i, 'Сервер вернул некорректный ответ.'],
+];
+
+export function extractLocalizedApiError(data: unknown, fallback: string, locale: UiLocale = 'en'): string {
+  const message = extractApiError(data, fallback);
+  if (locale !== 'ru') return message;
+
+  for (const [pattern, translated] of RU_KNOWN_ERROR_PATTERNS) {
+    if (pattern.test(message)) return translated;
+  }
+
+  return 'Не удалось выполнить операцию.';
 }
 
 export function isApiFailure(data: unknown, httpStatus: number): boolean {

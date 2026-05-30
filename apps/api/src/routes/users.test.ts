@@ -407,6 +407,49 @@ describe('user routes', () => {
       });
       expect(res.status).toBe(400);
     });
+
+    it('accepts supported UI locale preferences', async () => {
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([
+              {
+                id: 'user-123',
+                email: 'test@example.com',
+                name: 'Test User',
+                avatarUrl: null,
+                status: 'active',
+                mfaEnabled: false,
+                preferences: { locale: 'ru' },
+              },
+            ]),
+          }),
+        }),
+      } as any);
+
+      const res = await app.request('/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token' },
+        body: JSON.stringify({ preferences: { locale: 'ru' } }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.preferences.locale).toBe('ru');
+    });
+
+    it('rejects unsupported UI locale preferences', async () => {
+      const res = await app.request('/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token' },
+        body: JSON.stringify({ preferences: { locale: 'de' } }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('Invalid locale');
+      expect(db.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('PATCH /users/:id (admin update)', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractApiError, isApiFailure } from './apiError';
+import { extractApiError, extractLocalizedApiError, isApiFailure } from './apiError';
 
 describe('extractApiError', () => {
   const FALLBACK = 'Operation failed';
@@ -147,5 +147,20 @@ describe('extractApiError — new shapes', () => {
   });
   it('falls back when nothing parses', () => {
     expect(extractApiError({ weird: 1 }, 'fallback msg')).toBe('fallback msg');
+  });
+});
+
+describe('extractLocalizedApiError', () => {
+  it('localizes known auth and network messages for Russian UI', () => {
+    expect(extractLocalizedApiError({ error: 'Session expired' }, 'Operation failed', 'ru')).toBe('Сессия истекла. Войдите снова.');
+    expect(extractLocalizedApiError({ message: 'Network error' }, 'Operation failed', 'ru')).toBe('Ошибка сети. Проверьте подключение и повторите попытку.');
+  });
+
+  it('uses localized fallback for unknown backend messages in Russian UI', () => {
+    expect(extractLocalizedApiError({ error: 'Very specific backend text' }, 'Operation failed', 'ru')).toBe('Не удалось выполнить операцию.');
+  });
+
+  it('keeps existing extraction behavior for English UI', () => {
+    expect(extractLocalizedApiError({ error: 'Very specific backend text' }, 'Operation failed', 'en')).toBe('Very specific backend text');
   });
 });
