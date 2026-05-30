@@ -16,6 +16,8 @@ import {
 import { cn } from '@/lib/utils';
 import { navigateTo } from '@/lib/navigation';
 import { fetchWithAuth } from '../../stores/auth';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
 
 type SearchCategory = 'devices' | 'scripts' | 'alerts' | 'users' | 'settings';
 
@@ -64,36 +66,36 @@ const CATEGORY_ORDER: SearchCategory[] = [
 const CATEGORY_CONFIG: Record<
   SearchCategory,
   {
-    label: string;
+    labelKey: string;
     icon: LucideIcon;
     baseHref: string;
     detailHref?: (id: string) => string;
   }
 > = {
   devices: {
-    label: 'Devices',
+    labelKey: 'nav.devices',
     icon: Monitor,
     baseHref: '/devices',
     detailHref: (id) => `/devices/${id}`
   },
   scripts: {
-    label: 'Scripts',
+    labelKey: 'nav.scripts',
     icon: FileCode,
     baseHref: '/scripts',
     detailHref: (id) => `/scripts/${id}`
   },
   alerts: {
-    label: 'Alerts',
+    labelKey: 'nav.alerts',
     icon: Bell,
     baseHref: '/alerts'
   },
   users: {
-    label: 'Users',
+    labelKey: 'nav.users',
     icon: Users,
     baseHref: '/settings/users'
   },
   settings: {
-    label: 'Settings',
+    labelKey: 'nav.settings',
     icon: Settings,
     baseHref: '/settings'
   }
@@ -101,29 +103,29 @@ const CATEGORY_CONFIG: Record<
 
 const QUICK_ACTIONS: Array<{
   key: string;
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
   href: string;
   icon: LucideIcon;
 }> = [
   {
     key: 'action:new-device',
-    title: 'New device',
-    description: 'Add a device to your fleet',
+    titleKey: 'commandPalette.newDevice',
+    descriptionKey: 'commandPalette.newDeviceDescription',
     href: '/devices',
     icon: Plus
   },
   {
     key: 'action:run-script',
-    title: 'Run script',
-    description: 'Execute a script on devices',
+    titleKey: 'commandPalette.runScript',
+    descriptionKey: 'commandPalette.runScriptDescription',
     href: '/scripts',
     icon: Terminal
   },
   {
     key: 'action:manage-config-policies',
-    title: 'Configuration policies',
-    description: 'Manage alert rules in Configuration Policies',
+    titleKey: 'commandPalette.configurationPolicies',
+    descriptionKey: 'commandPalette.configurationPoliciesDescription',
     href: '/configuration-policies',
     icon: Bell
   }
@@ -231,7 +233,12 @@ const buildResultHref = (result: SearchResult): string => {
   return config.baseHref;
 };
 
-export default function CommandPalette() {
+interface CommandPaletteProps {
+  locale?: Locale;
+}
+
+export default function CommandPalette({ locale: initialLocale = 'en' }: CommandPaletteProps) {
+  const { t } = useI18n(initialLocale);
   const [open, setOpen] = useState(false);
   const [modifierLabel, setModifierLabel] = useState('');
   const [query, setQuery] = useState('');
@@ -307,7 +314,7 @@ export default function CommandPalette() {
       } catch (error: unknown) {
         if (!isActive) return;
         setResults([]);
-        setErrorMessage('Unable to load search results.');
+        setErrorMessage(t('commandPalette.unableToLoad'));
       } finally {
         if (!isActive) return;
         setIsLoading(false);
@@ -319,7 +326,7 @@ export default function CommandPalette() {
     return () => {
       isActive = false;
     };
-  }, [debouncedQuery, open]);
+  }, [debouncedQuery, open, t]);
 
   useEffect(() => {
     if (open) return;
@@ -373,13 +380,13 @@ export default function CommandPalette() {
   const quickActionItems = useMemo<CommandItem[]>(() => {
     return QUICK_ACTIONS.map((action) => ({
       key: action.key,
-      title: action.title,
-      description: action.description,
+      title: t(action.titleKey),
+      description: t(action.descriptionKey),
       href: action.href,
       icon: action.icon,
       kind: 'action'
     }));
-  }, []);
+  }, [t]);
 
   const recentCommandItems = useMemo<CommandItem[]>(() => {
     return recentItems.map((item) => ({
@@ -432,7 +439,7 @@ export default function CommandPalette() {
     if (showQuickActions) {
       pushSection({
         id: 'quick-actions',
-        label: 'Quick actions',
+          label: t('commandPalette.quickActions'),
         icon: Zap,
         items: quickActionItems
       });
@@ -441,7 +448,7 @@ export default function CommandPalette() {
     if (showRecent) {
       pushSection({
         id: 'recent',
-        label: 'Recent',
+          label: t('commandPalette.recent'),
         icon: Clock,
         items: recentCommandItems
       });
@@ -453,7 +460,7 @@ export default function CommandPalette() {
         if (items.length === 0) return;
         pushSection({
           id: category,
-          label: CATEGORY_CONFIG[category].label,
+          label: t(CATEGORY_CONFIG[category].labelKey),
           icon: CATEGORY_CONFIG[category].icon,
           items
         });
@@ -467,7 +474,8 @@ export default function CommandPalette() {
     resultItemsByCategory,
     showQuickActions,
     showRecent,
-    showResults
+    showResults,
+    t
   ]);
 
   const activeItemKey = selectableItems[activeIndex]?.key;
@@ -537,7 +545,7 @@ export default function CommandPalette() {
         className="flex h-9 w-full items-center gap-2 rounded-md border bg-background px-3 text-sm text-muted-foreground hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-ring"
       >
         <Search className="h-4 w-4 shrink-0" />
-        <span className="flex-1 truncate whitespace-nowrap text-left">Search devices, scripts, alerts, users, settings</span>
+        <span className="flex-1 truncate whitespace-nowrap text-left">{t('commandPalette.trigger')}</span>
         <span className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
           {modifierLabel ? `${modifierLabel}+K` : 'K'}
         </span>
@@ -561,7 +569,7 @@ export default function CommandPalette() {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search devices, scripts, alerts, users, settings..."
+                placeholder={t('commandPalette.placeholder')}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <span className="rounded border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
@@ -573,7 +581,7 @@ export default function CommandPalette() {
               {isLoading && (
                 <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Searching...
+                  {t('commandPalette.searching')}
                 </div>
               )}
 
@@ -585,7 +593,7 @@ export default function CommandPalette() {
 
               {!isLoading && sections.length === 0 && !showResults && (
                 <div className="px-4 py-6 text-sm text-muted-foreground">
-                  Start typing to search across devices, scripts, alerts, users, and settings.
+                  {t('commandPalette.startTyping')}
                 </div>
               )}
 
@@ -645,14 +653,14 @@ export default function CommandPalette() {
 
               {showResults && !isLoading && results.length === 0 && !errorMessage && (
                 <div className="px-4 py-6 text-sm text-muted-foreground">
-                  No results found. Try a different query.
+                  {t('commandPalette.noResults')}
                 </div>
               )}
             </div>
 
             <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
-              <span>Use arrows to navigate, Enter to open</span>
-              <span>Esc to close</span>
+              <span>{t('commandPalette.useArrows')}</span>
+              <span>{t('commandPalette.escToClose')}</span>
             </div>
           </div>
         </div>

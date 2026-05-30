@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PartnerSettingsPage, { runPartnerSave } from './PartnerSettingsPage';
 import { fetchWithAuth } from '../../stores/auth';
@@ -22,6 +22,10 @@ vi.mock('../shared/Toast', () => ({
 const fetchWithAuthMock = vi.mocked(fetchWithAuth);
 const useOrgStoreMock = vi.mocked(useOrgStore);
 const showToastMock = vi.mocked(showToast);
+
+afterEach(() => {
+  cleanup();
+});
 
 const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500): Response =>
   ({
@@ -121,6 +125,45 @@ describe('PartnerSettingsPage language control', () => {
 
     expect(screen.queryByText('More languages coming soon')).toBeNull();
     expect(screen.getByText('Default language for partner settings.')).not.toBeNull();
+  });
+
+  it('saves Russian as the partner regional default language', async () => {
+    fetchWithAuthMock.mockResolvedValue(makeJsonResponse({ data: [] }));
+    fetchWithAuthMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        id: 'partner-1',
+        name: 'Acme MSP',
+        slug: 'acme',
+        type: 'partner',
+        plan: 'pro',
+        createdAt: '2026-02-09T00:00:00.000Z',
+        settings: {
+          timezone: 'UTC',
+          dateFormat: 'MM/DD/YYYY',
+          timeFormat: '12h',
+          language: 'en',
+          businessHours: { preset: 'business' },
+          contact: {}
+        }
+      })
+    );
+    fetchWithAuthMock.mockResolvedValueOnce(
+      makeJsonResponse({ id: 'partner-1', name: 'Acme MSP', settings: {} })
+    );
+
+    render(<PartnerSettingsPage locale="ru" />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /^Региональные$/i }));
+    await user.selectOptions(screen.getByLabelText('Язык'), 'ru');
+    await user.click(screen.getByRole('button', { name: /Сохранить настройки/i }));
+
+    const patchCall = fetchWithAuthMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'PATCH'
+    );
+    expect(patchCall).toBeDefined();
+    const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+    expect(body.settings.language).toBe('ru');
   });
 });
 

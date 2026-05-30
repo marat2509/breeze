@@ -1,31 +1,39 @@
 ---
 import '../styles/globals.css';
 import { ClientRouter } from 'astro:transitions';
+import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
+import { translate } from '../i18n/resources';
 
 interface Props {
   title: string;
   description?: string;
   tagline?: string;
+  locale?: Locale;
 }
 
 const {
   title,
-  description = 'Breeze RMM - Remote Monitoring and Management',
-  tagline = 'The modern RMM platform built for speed, clarity, and scale.',
+  description,
+  tagline,
+  locale: propLocale,
 } = Astro.props;
+const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
+const pageDescription = description ?? translate(locale, 'app.metaDescription');
+const heroTagline = tagline ?? translate(locale, 'auth.tagline');
+const titleSuffix = translate(locale, 'app.titleSuffix');
 ---
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
+    <meta name="description" content={pageDescription} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <title>{title} | Breeze RMM</title>
+    <title>{title} | {titleSuffix}</title>
     <ClientRouter />
   </head>
   <body class="min-h-screen bg-background antialiased">
@@ -47,10 +55,10 @@ const {
         <div class="space-y-10">
           <div>
             <h2 class="text-2xl font-bold leading-snug tracking-tight lg:text-3xl">
-              Effortless endpoint<br />management
+              {translate(locale, 'auth.heroTitle')}
             </h2>
             <p class="mt-3 text-sm leading-relaxed text-white/70">
-              {tagline}
+              {heroTagline}
             </p>
           </div>
 
@@ -62,8 +70,8 @@ const {
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-semibold text-white/95">10,000+ endpoints</p>
-                <p class="text-xs leading-relaxed text-white/55">Built to handle fleets of any size without breaking a sweat.</p>
+                <p class="text-sm font-semibold text-white/95">{translate(locale, 'auth.endpoints')}</p>
+                <p class="text-xs leading-relaxed text-white/55">{translate(locale, 'auth.endpointsDescription')}</p>
               </div>
             </div>
 
@@ -74,8 +82,8 @@ const {
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-semibold text-white/95">Real-time monitoring</p>
-                <p class="text-xs leading-relaxed text-white/55">Live telemetry, instant alerts, zero guesswork.</p>
+                <p class="text-sm font-semibold text-white/95">{translate(locale, 'auth.realTimeMonitoring')}</p>
+                <p class="text-xs leading-relaxed text-white/55">{translate(locale, 'auth.realTimeMonitoringDescription')}</p>
               </div>
             </div>
 
@@ -86,8 +94,8 @@ const {
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-semibold text-white/95">AI-powered insights</p>
-                <p class="text-xs leading-relaxed text-white/55">Smart diagnostics and automated remediation at your fingertips.</p>
+                <p class="text-sm font-semibold text-white/95">{translate(locale, 'auth.aiInsights')}</p>
+                <p class="text-xs leading-relaxed text-white/55">{translate(locale, 'auth.aiInsightsDescription')}</p>
               </div>
             </div>
           </div>

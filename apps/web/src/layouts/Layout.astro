@@ -1,20 +1,26 @@
 ---
 import '../styles/globals.css';
 import { ClientRouter } from 'astro:transitions';
+import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
+import { translate } from '../i18n/resources';
 
 interface Props {
   title: string;
+  locale?: Locale;
 }
 
-const { title } = Astro.props;
+const { title, locale: propLocale } = Astro.props;
+const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
+const description = translate(locale, 'app.metaDescription');
+const titleSuffix = translate(locale, 'app.titleSuffix');
 ---
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Breeze RMM - Remote Monitoring and Management" />
+    <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,7 +32,7 @@ const { title } = Astro.props;
       the script changes (see issue #618).
     -->
     <script is:inline src="/theme-bootstrap.js"></script>
-    <title>{title} | Breeze RMM</title>
+    <title>{title} | {titleSuffix}</title>
     <ClientRouter />
   </head>
   <body class="min-h-screen bg-background antialiased">

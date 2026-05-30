@@ -6,20 +6,26 @@ import ChangePasswordForm from './ChangePasswordForm';
 import MFASettings from './MFASettings';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
+import { translate } from '../../i18n/resources';
+import LanguageSelector from '../layout/LanguageSelector';
 
-const profileSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  avatarUrl: z
-    .string()
-    .max(2048, 'Avatar URL is too long')
-    .refine(
-      (value) => value.trim() === '' || /^https?:\/\//i.test(value.trim()),
-      'Avatar URL must start with http:// or https://'
-    )
-    .optional()
-});
+function buildProfileSchema(locale: Locale) {
+  return z.object({
+    name: z.string().min(2, translate(locale, 'profile.nameTooShort')),
+    avatarUrl: z
+      .string()
+      .max(2048, translate(locale, 'profile.avatarTooLong'))
+      .refine(
+        (value) => value.trim() === '' || /^https?:\/\//i.test(value.trim()),
+        translate(locale, 'profile.avatarInvalid')
+      )
+      .optional()
+  });
+}
 
-type ProfileFormValues = z.infer<typeof profileSchema>;
+type ProfileFormValues = z.infer<ReturnType<typeof buildProfileSchema>>;
 
 type User = {
   id: string;
@@ -31,9 +37,12 @@ type User = {
 
 type ProfilePageProps = {
   initialUser?: User;
+  locale?: Locale;
 };
 
-export default function ProfilePage({ initialUser }: ProfilePageProps) {
+export default function ProfilePage({ initialUser, locale: initialLocale = 'en' }: ProfilePageProps) {
+  const { locale, t } = useI18n(initialLocale);
+  const profileSchema = useMemo(() => buildProfileSchema(locale), [locale]);
   const [user, setUser] = useState<User | null>(initialUser ?? null);
   const [isLoadingUser, setIsLoadingUser] = useState(!initialUser);
   const [profileError, setProfileError] = useState<string | undefined>();
@@ -84,7 +93,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
             void navigateTo('/login', { replace: true });
             return;
           }
-          throw new Error('Failed to fetch user data');
+          throw new Error(t('profile.failedToLoad'));
         }
         const userData = await response.json();
         setUser(userData);
@@ -93,14 +102,14 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
           avatarUrl: userData.avatarUrl ?? ''
         });
       } catch {
-        setProfileError('Failed to load profile data');
+        setProfileError(t('profile.failedToLoad'));
       } finally {
         setIsLoadingUser(false);
       }
     };
 
     fetchUser();
-  }, [initialUser, reset]);
+  }, [initialUser, reset, t]);
 
   const clearMessages = useCallback(() => {
     setProfileError(undefined);
@@ -123,7 +132,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message ?? 'Failed to update profile');
+        throw new Error(errorData.message ?? t('profile.failedToUpdate'));
       }
 
       const updatedUser = await response.json();
@@ -132,9 +141,9 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
         name: updatedUser.name ?? '',
         avatarUrl: updatedUser.avatarUrl ?? ''
       });
-      setProfileSuccess('Profile updated successfully');
+      setProfileSuccess(t('profile.updated'));
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Failed to update profile');
+      setProfileError(error instanceof Error ? error.message : t('profile.failedToUpdate'));
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -159,12 +168,12 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message ?? 'Failed to change password');
+        throw new Error(errorData.message ?? t('changePassword.failed'));
       }
 
-      setPasswordSuccess('Password changed successfully');
+      setPasswordSuccess(t('changePassword.changed'));
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
+      setPasswordError(error instanceof Error ? error.message : t('changePassword.failed'));
     } finally {
       setIsChangingPassword(false);
     }
@@ -185,7 +194,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error ?? errorData.message ?? `Failed to start MFA setup (HTTP ${response.status})`
+          errorData.error ?? errorData.message ?? `${t('mfa.setupFailed')} (HTTP ${response.status})`
         );
       }
 
@@ -193,7 +202,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
       setQrCodeDataUrl(data.qrCodeDataUrl);
       return true;
     } catch (error) {
-      setMfaError(error instanceof Error ? error.message : 'Failed to start MFA setup');
+      setMfaError(error instanceof Error ? error.message : t('mfa.setupFailed'));
       return false;
     } finally {
       setMfaLoading(false);
@@ -213,17 +222,17 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error ?? errorData.message ?? `Failed to enable MFA (HTTP ${response.status})`
+          errorData.error ?? errorData.message ?? `${t('mfa.enableFailed')} (HTTP ${response.status})`
         );
       }
 
       const data = await response.json();
       setUser(prev => (prev ? { ...prev, mfaEnabled: true } : null));
       setRecoveryCodes(data.recoveryCodes);
-      setMfaSuccess('Multi-factor authentication enabled successfully');
+      setMfaSuccess(t('mfa.enabledSuccess'));
       setQrCodeDataUrl(undefined);
     } catch (error) {
-      setMfaError(error instanceof Error ? error.message : 'Failed to enable MFA');
+      setMfaError(error instanceof Error ? error.message : t('mfa.enableFailed'));
     } finally {
       setMfaLoading(false);
     }
@@ -242,15 +251,15 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error ?? errorData.message ?? `Failed to disable MFA (HTTP ${response.status})`
+          errorData.error ?? errorData.message ?? `${t('mfa.disableFailed')} (HTTP ${response.status})`
         );
       }
 
       setUser(prev => (prev ? { ...prev, mfaEnabled: false } : null));
       setRecoveryCodes(undefined);
-      setMfaSuccess('Multi-factor authentication disabled');
+      setMfaSuccess(t('mfa.disabledSuccess'));
     } catch (error) {
-      setMfaError(error instanceof Error ? error.message : 'Failed to disable MFA');
+      setMfaError(error instanceof Error ? error.message : t('mfa.disableFailed'));
     } finally {
       setMfaLoading(false);
     }
@@ -268,14 +277,14 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message ?? 'Failed to generate recovery codes');
+        throw new Error(errorData.message ?? t('mfa.recoveryFailed'));
       }
 
       const data = await response.json();
       setRecoveryCodes(data.recoveryCodes);
-      setMfaSuccess('New recovery codes generated');
+      setMfaSuccess(t('mfa.recoveryGenerated'));
     } catch (error) {
-      setMfaError(error instanceof Error ? error.message : 'Failed to generate recovery codes');
+      setMfaError(error instanceof Error ? error.message : t('mfa.recoveryFailed'));
     } finally {
       setMfaLoading(false);
     }
@@ -284,7 +293,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
   if (isLoadingUser) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <div className="text-sm text-muted-foreground">Loading profile...</div>
+        <div className="text-sm text-muted-foreground">{t('profile.loading')}</div>
       </div>
     );
   }
@@ -292,9 +301,9 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Profile settings</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t('profile.title')}</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your account settings and security preferences.
+          {t('profile.description')}
         </p>
       </div>
 
@@ -304,8 +313,8 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
         className="space-y-6 rounded-lg border bg-card p-6 shadow-sm"
       >
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Profile information</h2>
-          <p className="text-sm text-muted-foreground">Update your personal details.</p>
+          <h2 className="text-lg font-semibold">{t('profile.information')}</h2>
+          <p className="text-sm text-muted-foreground">{t('profile.updatePersonalDetails')}</p>
         </div>
 
         <div className="flex items-center gap-4">
@@ -313,7 +322,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
             {previewAvatarUrl ? (
               <img
                 src={previewAvatarUrl}
-                alt={user?.name ?? 'User avatar'}
+                alt={user?.name ?? t('profile.userAvatar')}
                 className="h-16 w-16 rounded-full object-cover"
               />
             ) : (
@@ -321,22 +330,22 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
             )}
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-medium">Avatar</p>
+            <p className="text-sm font-medium">{t('profile.avatar')}</p>
             <p className="text-xs text-muted-foreground">
-              Provide an image URL to update your avatar.
+              {t('profile.avatarHint')}
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
           <label htmlFor="avatarUrl" className="text-sm font-medium">
-            Avatar image URL
+            {t('profile.avatarImageUrl')}
           </label>
           <input
             id="avatarUrl"
             type="url"
             autoComplete="url"
-            placeholder="https://example.com/avatar.png"
+            placeholder={t('profile.avatarPlaceholder')}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             {...register('avatarUrl')}
           />
@@ -345,13 +354,13 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
 
         <div className="space-y-2">
           <label htmlFor="name" className="text-sm font-medium">
-            Name
+            {t('profile.name')}
           </label>
           <input
             id="name"
             type="text"
             autoComplete="name"
-            placeholder="Your name"
+            placeholder={t('profile.namePlaceholder')}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             {...register('name')}
           />
@@ -360,7 +369,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
 
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-medium">
-            Email
+            {t('profile.email')}
           </label>
           <input
             id="email"
@@ -370,8 +379,15 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
             className="h-10 w-full rounded-md border bg-muted px-3 text-sm text-muted-foreground"
           />
           <p className="text-xs text-muted-foreground">
-            Email cannot be changed. Contact support for assistance.
+            {t('profile.emailLocked')}
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">
+            {t('common.language')}
+          </div>
+          <LanguageSelector locale={locale} />
         </div>
 
         {profileError && (
@@ -391,7 +407,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
           disabled={isProfileLoading}
           className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isProfileLoading ? 'Saving...' : 'Save changes'}
+          {isProfileLoading ? t('common.saving') : t('common.saveChanges')}
         </button>
       </form>
 
@@ -401,6 +417,7 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
         errorMessage={passwordError}
         successMessage={passwordSuccess}
         loading={isChangingPassword}
+        locale={locale}
       />
 
       {/* MFA Settings */}
@@ -415,13 +432,14 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
         errorMessage={mfaError}
         successMessage={mfaSuccess}
         loading={mfaLoading}
+        locale={locale}
       />
 
       {/* Onboarding */}
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Onboarding</h2>
+        <h2 className="text-lg font-semibold">{t('profile.onboarding')}</h2>
         <p className="text-sm text-muted-foreground mt-1 mb-4">
-          Reset the product tour to see the welcome walkthrough again.
+          {t('profile.onboardingDescription')}
         </p>
         {tourResetMsg && (
           <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 mb-3">
@@ -433,13 +451,13 @@ export default function ProfilePage({ initialUser }: ProfilePageProps) {
           onClick={() => {
             try {
               localStorage.removeItem('breeze-onboarding-complete');
-              setTourResetMsg('Tour reset. It will appear on your next page load.');
+              setTourResetMsg(t('profile.tourReset'));
               setTimeout(() => setTourResetMsg(undefined), 4000);
             } catch { /* ignore */ }
           }}
           className="rounded-md border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
         >
-          Restart tour
+          {t('profile.restartTour')}
         </button>
       </div>
     </div>

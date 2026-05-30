@@ -5,7 +5,13 @@ import ProfilePage from './ProfilePage';
 import { fetchWithAuth } from '../../stores/auth';
 
 vi.mock('../../stores/auth', () => ({
-  fetchWithAuth: vi.fn()
+  fetchWithAuth: vi.fn(),
+  useAuthStore: vi.fn((selector: (state: unknown) => unknown) =>
+    selector({
+      isAuthenticated: true,
+      user: { preferences: { theme: 'system', locale: 'en' } },
+    }),
+  ),
 }));
 
 const fetchWithAuthMock = vi.mocked(fetchWithAuth);
@@ -68,6 +74,24 @@ describe('ProfilePage avatar settings', () => {
         avatarUrl: 'https://cdn.example.com/new-avatar.png'
       })
     );
+  });
+
+  it('renders Russian profile copy and the language selector', () => {
+    render(
+      <ProfilePage
+        locale="ru"
+        initialUser={{
+          id: 'user-1',
+          name: 'Casey Admin',
+          email: 'casey@example.com',
+          mfaEnabled: false
+        }}
+      />
+    );
+
+    expect(screen.getByText('Настройки профиля')).toBeTruthy();
+    expect(screen.getByLabelText('Язык')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Сохранить изменения' })).toBeTruthy();
   });
 });
 

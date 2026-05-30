@@ -44,9 +44,13 @@ import { fetchWithAuth, useAuthStore } from '../../stores/auth';
 import { WEB_VERSION } from '../../lib/version';
 import { semverCompare } from '@breeze/shared';
 import BrandHeader from './BrandHeader';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
+import { translate } from '../../i18n/resources';
 
 interface SidebarProps {
   currentPath?: string;
+  locale?: Locale;
 }
 
 type SidebarMode = 'open' | 'hover' | 'collapsed';
@@ -75,7 +79,7 @@ function useCurrentPath(initialPath: string): string {
 // Nav item type
 // ---------------------------------------------------------------------------
 type NavItem = {
-  name: string;
+  labelKey: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badgeKind?: 'deletion-requests';
@@ -85,13 +89,13 @@ type NavItem = {
 // Top-level items (always visible, 6-8 max)
 // ---------------------------------------------------------------------------
 const topLevelNav: NavItem[] = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Devices', href: '/devices', icon: Monitor },
-  { name: 'Alerts', href: '/alerts', icon: Bell },
-  { name: 'Incidents', href: '/incidents', icon: ShieldAlert },
-  { name: 'Remote Access', href: '/remote', icon: Terminal },
-  { name: 'Scripts', href: '/scripts', icon: FileCode },
-  { name: 'Patches', href: '/patches', icon: Download },
+  { labelKey: 'nav.dashboard', href: '/', icon: LayoutDashboard },
+  { labelKey: 'nav.devices', href: '/devices', icon: Monitor },
+  { labelKey: 'nav.alerts', href: '/alerts', icon: Bell },
+  { labelKey: 'nav.incidents', href: '/incidents', icon: ShieldAlert },
+  { labelKey: 'nav.remoteAccess', href: '/remote', icon: Terminal },
+  { labelKey: 'nav.scripts', href: '/scripts', icon: FileCode },
+  { labelKey: 'nav.patches', href: '/patches', icon: Download },
 ];
 
 // ---------------------------------------------------------------------------
@@ -99,7 +103,7 @@ const topLevelNav: NavItem[] = [
 // ---------------------------------------------------------------------------
 interface NavSection {
   id: string;
-  label: string;
+  labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
   items: NavItem[];
 }
@@ -107,68 +111,68 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     id: 'ai-fleet',
-    label: 'AI & Fleet',
+    labelKey: 'nav.aiFleet',
     icon: BrainCircuit,
     items: [
-      { name: 'Fleet', href: '/fleet', icon: BrainCircuit },
-      { name: 'AI Workspace', href: '/workspace', icon: MessagesSquare },
+      { labelKey: 'nav.fleet', href: '/fleet', icon: BrainCircuit },
+      { labelKey: 'nav.aiWorkspace', href: '/workspace', icon: MessagesSquare },
     ],
   },
   {
     id: 'security',
-    label: 'Security',
+    labelKey: 'nav.security',
     icon: ShieldCheck,
     items: [
-      { name: 'Network Monitor', href: '/monitoring', icon: Activity },
-      { name: 'Security', href: '/security', icon: ShieldCheck },
-      { name: 'DNS Security', href: '/dns-security', icon: Network },
-      { name: 'Sensitive Data', href: '/sensitive-data', icon: ScanSearch },
-      { name: 'Peripherals', href: '/peripherals', icon: Usb },
-      { name: 'AI Risk Engine', href: '/ai-risk', icon: BrainCircuit },
-      { name: 'CIS Benchmarks', href: '/cis-hardening', icon: ClipboardCheck },
-      { name: 'Compliance Baselines', href: '/audit-baselines', icon: ListChecks },
+      { labelKey: 'nav.networkMonitor', href: '/monitoring', icon: Activity },
+      { labelKey: 'nav.security', href: '/security', icon: ShieldCheck },
+      { labelKey: 'nav.dnsSecurity', href: '/dns-security', icon: Network },
+      { labelKey: 'nav.sensitiveData', href: '/sensitive-data', icon: ScanSearch },
+      { labelKey: 'nav.peripherals', href: '/peripherals', icon: Usb },
+      { labelKey: 'nav.aiRiskEngine', href: '/ai-risk', icon: BrainCircuit },
+      { labelKey: 'nav.cisBenchmarks', href: '/cis-hardening', icon: ClipboardCheck },
+      { labelKey: 'nav.complianceBaselines', href: '/audit-baselines', icon: ListChecks },
     ],
   },
   {
     id: 'operations',
-    label: 'Operations',
+    labelKey: 'nav.operations',
     icon: Layers,
     items: [
-      { name: 'Network Discovery', href: '/discovery', icon: Network },
-      { name: 'Software Library', href: '/software', icon: Package },
-      { name: 'Software Policies', href: '/software-inventory', icon: Package },
-      { name: 'Config Policies', href: '/configuration-policies', icon: Layers },
-      { name: 'Backup', href: '/backup', icon: HardDrive },
-      { name: 'Cloud Backup', href: '/c2c', icon: Cloud },
-      { name: 'Disaster Recovery', href: '/dr', icon: ShieldEllipsis },
-      { name: 'Integrations', href: '/integrations', icon: Plug },
+      { labelKey: 'nav.networkDiscovery', href: '/discovery', icon: Network },
+      { labelKey: 'nav.softwareLibrary', href: '/software', icon: Package },
+      { labelKey: 'nav.softwarePolicies', href: '/software-inventory', icon: Package },
+      { labelKey: 'nav.configPolicies', href: '/configuration-policies', icon: Layers },
+      { labelKey: 'nav.backup', href: '/backup', icon: HardDrive },
+      { labelKey: 'nav.cloudBackup', href: '/c2c', icon: Cloud },
+      { labelKey: 'nav.disasterRecovery', href: '/dr', icon: ShieldEllipsis },
+      { labelKey: 'nav.integrations', href: '/integrations', icon: Plug },
     ],
   },
   {
     id: 'reporting',
-    label: 'Reporting',
+    labelKey: 'nav.reporting',
     icon: BarChart3,
     items: [
-      { name: 'Reports', href: '/reports', icon: FileText },
-      { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-      { name: 'Audit Trail', href: '/audit', icon: FileText },
-      { name: 'Event Logs', href: '/logs', icon: ScrollText },
+      { labelKey: 'nav.reports', href: '/reports', icon: FileText },
+      { labelKey: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+      { labelKey: 'nav.auditTrail', href: '/audit', icon: FileText },
+      { labelKey: 'nav.eventLogs', href: '/logs', icon: ScrollText },
     ],
   },
   {
     id: 'settings',
-    label: 'Settings',
+    labelKey: 'nav.settings',
     icon: Building,
     items: [
-      { name: 'Partner', href: '/settings/partner', icon: Building },
-      { name: 'Organizations', href: '/settings/organizations', icon: Building2 },
-      { name: 'AI Usage & Budget', href: '/settings/ai-usage', icon: BrainCircuit },
-      { name: 'Custom Fields', href: '/settings/custom-fields', icon: ListChecks },
-      { name: 'Saved Filters', href: '/settings/filters', icon: Filter },
-      { name: 'Users', href: '/settings/users', icon: Users },
-      { name: 'Roles', href: '/settings/roles', icon: KeyRound },
-      { name: 'Enrollment Keys', href: '/settings/enrollment-keys', icon: Key },
-      { name: 'Deletion requests', href: '/admin/account-deletion-requests', icon: UserX, badgeKind: 'deletion-requests' },
+      { labelKey: 'nav.partner', href: '/settings/partner', icon: Building },
+      { labelKey: 'nav.organizations', href: '/settings/organizations', icon: Building2 },
+      { labelKey: 'nav.aiUsageBudget', href: '/settings/ai-usage', icon: BrainCircuit },
+      { labelKey: 'nav.customFields', href: '/settings/custom-fields', icon: ListChecks },
+      { labelKey: 'nav.savedFilters', href: '/settings/filters', icon: Filter },
+      { labelKey: 'nav.users', href: '/settings/users', icon: Users },
+      { labelKey: 'nav.roles', href: '/settings/roles', icon: KeyRound },
+      { labelKey: 'nav.enrollmentKeys', href: '/settings/enrollment-keys', icon: Key },
+      { labelKey: 'nav.deletionRequests', href: '/admin/account-deletion-requests', icon: UserX, badgeKind: 'deletion-requests' },
     ],
   },
 ];
@@ -245,7 +249,8 @@ function useDeletionRequestsBadge(): number | undefined {
   return count;
 }
 
-export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps) {
+export default function Sidebar({ currentPath: initialPath = '/', locale: initialLocale = 'en' }: SidebarProps) {
+  const { locale, t } = useI18n(initialLocale);
   const [mode, setMode] = useState<SidebarMode>(readSavedMode);
   const [hovered, setHovered] = useState(false);
   const currentPath = useCurrentPath(initialPath);
@@ -419,11 +424,12 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
     const narrow = forMobileOverlay ? false : isNarrow;
     const badgeCount = item.badgeKind === 'deletion-requests' ? deletionRequestsCount : undefined;
     const showBadge = typeof badgeCount === 'number' && badgeCount > 0;
+    const label = t(item.labelKey);
     return (
       <a
-        key={item.name}
+        key={item.href}
         href={item.href}
-        title={narrow && !hovered ? item.name : undefined}
+        title={narrow && !hovered ? label : undefined}
         onClick={forMobileOverlay ? () => closeMobileMenu() : undefined}
         className={cn(
           'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -433,11 +439,11 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
         )}
       >
         <item.icon className="h-5 w-5 flex-shrink-0" />
-        {labels && <span className="truncate flex-1">{item.name}</span>}
+        {labels && <span className="truncate flex-1">{label}</span>}
         {labels && showBadge && (
           <span
             className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500/20 px-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200"
-            aria-label={`${badgeCount} pending`}
+            aria-label={t('sidebar.pendingCount', { count: badgeCount })}
           >
             {badgeCount! > 99 ? '99+' : badgeCount}
           </span>
@@ -465,7 +471,7 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
             className="flex items-center justify-between w-full px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/70 hover:text-muted-foreground cursor-pointer transition-colors"
             style={{ fontSize: '12px' }}
           >
-            <span>{section.label}</span>
+            <span>{t(section.labelKey)}</span>
             <ChevronDown
               className={cn(
                 'h-3.5 w-3.5 transition-transform duration-200',
@@ -496,7 +502,7 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
 
   // --- Toggle button icon --------------------------------------------------
   const ToggleIcon = effectiveMode === 'open' ? ChevronLeft : effectiveMode === 'hover' ? ChevronsLeft : ChevronRight;
-  const toggleTitle = effectiveMode === 'open' ? 'Auto-hide sidebar' : effectiveMode === 'hover' ? 'Collapse sidebar' : 'Expand sidebar';
+  const toggleTitle = effectiveMode === 'open' ? t('sidebar.autoHide') : effectiveMode === 'hover' ? t('sidebar.collapse') : t('sidebar.expand');
 
   // --- Shared CSS for expand/collapse animation ----------------------------
   const sectionAnimCss = (
@@ -553,13 +559,13 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
       {showLabels && (
         <div className="border-t px-4 py-2 text-[10px] text-muted-foreground/50">
           <p>
-            Web <VersionSpan version={WEB_VERSION} latest={latestVersion} component="Web" />
+            Web <VersionSpan version={WEB_VERSION} latest={latestVersion} component="Web" locale={locale} />
             {apiVersion && apiVersion !== 'unavailable' && (
               <>
-                {' · '}API <VersionSpan version={apiVersion} latest={latestVersion} component="API" />
+                {' · '}API <VersionSpan version={apiVersion} latest={latestVersion} component="API" locale={locale} />
               </>
             )}
-            {apiVersion === 'unavailable' && ' · API unavailable'}
+            {apiVersion === 'unavailable' && ` · ${t('sidebar.apiUnavailable')}`}
           </p>
         </div>
       )}
@@ -583,7 +589,7 @@ export default function Sidebar({ currentPath: initialPath = '/' }: SidebarProps
           <button
             onClick={closeMobileMenu}
             className="rounded-md p-1.5 hover:bg-muted"
-            title="Close menu"
+            title={t('sidebar.closeMenu')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -620,23 +626,25 @@ export function VersionSpan({
   version,
   latest,
   component,
+  locale = 'en',
 }: {
   version: string;
   latest: string | null;
   component: 'Web' | 'API';
+  locale?: Locale;
 }) {
   if (!latest) {
-    return <span title={`${component} ${version} — latest version unknown`}>{version}</span>;
+    return <span title={translate(locale, 'sidebar.latestUnknown', { component, version })}>{version}</span>;
   }
   const cmp = semverCompare(version, latest);
   if (cmp === null) {
-    return <span title={`${component} ${version} — latest version unknown`}>{version}</span>;
+    return <span title={translate(locale, 'sidebar.latestUnknown', { component, version })}>{version}</span>;
   }
   if (cmp < 0) {
     return (
       <span
         className="text-red-500/80"
-        title={`${component} ${version} — update available (latest ${latest})`}
+        title={translate(locale, 'sidebar.updateAvailable', { component, version, latest })}
       >
         {version}
       </span>
@@ -645,7 +653,7 @@ export function VersionSpan({
   return (
     <span
       className="text-green-500/70"
-      title={`${component} ${version} — up to date`}
+      title={translate(locale, 'sidebar.upToDate', { component, version })}
     >
       {version}
     </span>

@@ -1,8 +1,12 @@
 ---
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ProfilePage from '../../components/settings/ProfilePage';
+import { resolveLocaleFromRequest } from '../../i18n/locales';
+import { translate } from '../../i18n/resources';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<DashboardLayout title="Profile Settings">
-  <ProfilePage client:load />
+<DashboardLayout title={translate(locale, 'profile.title')} locale={locale}>
+  <ProfilePage client:load locale={locale} />
 </DashboardLayout>

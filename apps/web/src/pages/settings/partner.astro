@@ -1,8 +1,12 @@
 ---
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import PartnerSettingsPage from '../../components/settings/PartnerSettingsPage';
+import { resolveLocaleFromRequest } from '../../i18n/locales';
+import { translate } from '../../i18n/resources';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<DashboardLayout title="Partner Settings">
-  <PartnerSettingsPage client:load />
+<DashboardLayout title={translate(locale, 'partnerSettings.title')} locale={locale}>
+  <PartnerSettingsPage client:load locale={locale} />
 </DashboardLayout>

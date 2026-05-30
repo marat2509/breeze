@@ -1,6 +1,8 @@
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MfaMethod } from '../../stores/auth';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
 
 const DIGIT_COUNT = 6;
 
@@ -14,19 +16,22 @@ type MFAVerifyFormProps = {
   onSendSmsCode?: () => Promise<void>;
   smsSending?: boolean;
   smsSent?: boolean;
+  locale?: Locale;
 };
 
 export default function MFAVerifyForm({
   onSubmit,
   errorMessage,
-  submitLabel = 'Verify',
+  submitLabel,
   loading,
   mfaMethod = 'totp',
   phoneLast4,
   onSendSmsCode,
   smsSending,
-  smsSent
+  smsSent,
+  locale: initialLocale = 'en'
 }: MFAVerifyFormProps) {
+  const { t } = useI18n(initialLocale);
   const [digits, setDigits] = useState<string[]>(Array(DIGIT_COUNT).fill(''));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -108,13 +113,13 @@ export default function MFAVerifyForm({
       className="space-y-6"
     >
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Enter your verification code</h2>
+        <h2 className="text-lg font-semibold">{t('mfa.verifyFormTitle', undefined, 'Enter your verification code')}</h2>
         <p className="text-sm text-muted-foreground">
           {isSms
             ? smsSent
-              ? `Enter the 6-digit code sent to your phone ending in ${phoneLast4 || '****'}.`
-              : `We'll send a code to your phone ending in ${phoneLast4 || '****'}.`
-            : 'Use your authenticator app to get the 6-digit code.'}
+              ? t('mfa.smsCodeSentHint', { last4: phoneLast4 || '****' }, `Enter the 6-digit code sent to your phone ending in ${phoneLast4 || '****'}.`)
+              : t('mfa.smsWillSendHint', { last4: phoneLast4 || '****' }, `We'll send a code to your phone ending in ${phoneLast4 || '****'}.`)
+            : t('mfa.totpLoginHint', undefined, 'Use your authenticator app to get the 6-digit code.')}
         </p>
       </div>
 
@@ -125,14 +130,14 @@ export default function MFAVerifyForm({
           disabled={smsSending || resendCooldown > 0}
           className="flex h-11 w-full items-center justify-center rounded-md border bg-muted text-sm font-medium transition hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {smsSending ? 'Sending...' : 'Send code'}
+          {smsSending ? t('mfa.sending', undefined, 'Sending...') : t('mfa.sendCode', undefined, 'Send code')}
         </button>
       )}
 
       {(!isSms || smsSent) && (
         <>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Verification code</label>
+            <label className="text-sm font-medium">{t('mfa.verificationCode')}</label>
             <div className="flex items-center gap-2">
               {digits.map((digit, index) => (
                 <input
@@ -156,8 +161,8 @@ export default function MFAVerifyForm({
             </div>
             <p className="text-xs text-muted-foreground">
               {isSms
-                ? 'If you lose access to your phone, use a recovery code.'
-                : 'If you lose access to your device, use a recovery code.'}
+                ? t('mfa.smsRecoveryHint', undefined, 'If you lose access to your phone, use a recovery code.')
+                : t('mfa.totpRecoveryHint', undefined, 'If you lose access to your device, use a recovery code.')}
             </p>
           </div>
 
@@ -169,10 +174,10 @@ export default function MFAVerifyForm({
               className="text-sm text-muted-foreground underline hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               {resendCooldown > 0
-                ? `Resend code (${resendCooldown}s)`
+                ? t('mfa.resendCodeSeconds', { seconds: resendCooldown }, `Resend code (${resendCooldown}s)`)
                 : smsSending
-                  ? 'Sending...'
-                  : 'Resend code'}
+                  ? t('mfa.sending', undefined, 'Sending...')
+                  : t('mfa.resendCode', undefined, 'Resend code')}
             </button>
           )}
         </>
@@ -191,7 +196,7 @@ export default function MFAVerifyForm({
           disabled={isLoading || code.length !== DIGIT_COUNT}
           className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isLoading ? 'Verifying...' : submitLabel}
+          {isLoading ? t('mfa.verifying') : submitLabel ?? t('mfa.verify', undefined, 'Verify')}
         </button>
       )}
     </form>

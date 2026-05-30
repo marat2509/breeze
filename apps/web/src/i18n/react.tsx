@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getStoredLocale, persistLocalePreference } from './client';
 import { DEFAULT_LOCALE, normalizeLocale, type Locale } from './locales';
 import { translate, type TranslationParams } from './resources';
@@ -27,11 +27,11 @@ export function useLocale(initialLocale?: Locale): [Locale, (locale: Locale) => 
     return () => window.removeEventListener(LOCALE_CHANGE_EVENT, handler);
   }, []);
 
-  const setLocale = (next: Locale) => {
+  const setLocale = useCallback((next: Locale) => {
     persistLocalePreference(next);
     setLocaleState(next);
     emitLocaleChange(next);
-  };
+  }, []);
 
   return [locale, setLocale];
 }

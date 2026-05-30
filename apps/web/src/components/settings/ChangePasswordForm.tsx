@@ -3,23 +3,28 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { cn, widthPercentClass } from '@/lib/utils';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
+import { translate } from '../../i18n/resources';
 
-const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string().min(8, 'Confirm your new password')
-  })
-  .refine(data => data.newPassword === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword']
-  })
-  .refine(data => data.currentPassword !== data.newPassword, {
-    message: 'New password must be different from current password',
-    path: ['newPassword']
-  });
+function buildChangePasswordSchema(locale: Locale) {
+  return z
+    .object({
+      currentPassword: z.string().min(1, translate(locale, 'changePassword.currentRequired')),
+      newPassword: z.string().min(8, translate(locale, 'auth.shortPassword')),
+      confirmPassword: z.string().min(8, translate(locale, 'changePassword.confirmRequired'))
+    })
+    .refine(data => data.newPassword === data.confirmPassword, {
+      message: translate(locale, 'changePassword.mismatch'),
+      path: ['confirmPassword']
+    })
+    .refine(data => data.currentPassword !== data.newPassword, {
+      message: translate(locale, 'changePassword.mustDiffer'),
+      path: ['newPassword']
+    });
+}
 
-type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
+type ChangePasswordFormValues = z.infer<ReturnType<typeof buildChangePasswordSchema>>;
 
 type ChangePasswordFormProps = {
   onSubmit?: (values: ChangePasswordFormValues) => void | Promise<void>;
@@ -27,6 +32,7 @@ type ChangePasswordFormProps = {
   successMessage?: string;
   submitLabel?: string;
   loading?: boolean;
+  locale?: Locale;
 };
 
 type StrengthConfig = {
@@ -36,11 +42,11 @@ type StrengthConfig = {
 };
 
 const strengthScale: StrengthConfig[] = [
-  { label: 'Too weak', className: 'bg-destructive', minScore: 0 },
-  { label: 'Weak', className: 'bg-destructive/70', minScore: 2 },
-  { label: 'Fair', className: 'bg-amber-500', minScore: 3 },
-  { label: 'Good', className: 'bg-emerald-500', minScore: 4 },
-  { label: 'Strong', className: 'bg-emerald-600', minScore: 5 }
+  { label: 'changePassword.tooWeak', className: 'bg-destructive', minScore: 0 },
+  { label: 'changePassword.weak', className: 'bg-destructive/70', minScore: 2 },
+  { label: 'changePassword.fair', className: 'bg-amber-500', minScore: 3 },
+  { label: 'changePassword.good', className: 'bg-emerald-500', minScore: 4 },
+  { label: 'changePassword.strong', className: 'bg-emerald-600', minScore: 5 }
 ];
 
 function getStrengthScore(password: string) {
@@ -69,9 +75,12 @@ export default function ChangePasswordForm({
   onSubmit,
   errorMessage,
   successMessage,
-  submitLabel = 'Change password',
-  loading
+  submitLabel,
+  loading,
+  locale: initialLocale = 'en'
 }: ChangePasswordFormProps) {
+  const { locale, t } = useI18n(initialLocale);
+  const changePasswordSchema = useMemo(() => buildChangePasswordSchema(locale), [locale]);
   const {
     register,
     handleSubmit,
@@ -93,7 +102,7 @@ export default function ChangePasswordForm({
   const strength = useMemo(() => {
     if (!newPasswordValue) {
       return {
-        label: 'Enter a password',
+        label: t('changePassword.enterPassword'),
         className: 'bg-muted',
         percent: 0
       };
@@ -105,14 +114,14 @@ export default function ChangePasswordForm({
       .reverse()
       .find(item => score >= item.minScore);
     const percent = Math.min(100, Math.round((score / 5) * 100));
-    const defaultTier = { label: 'Weak', className: 'bg-destructive', minScore: 0 };
+    const defaultTier = { label: 'changePassword.weak', className: 'bg-destructive', minScore: 0 };
 
     return {
-      label: tier?.label ?? defaultTier.label,
+      label: t(tier?.label ?? defaultTier.label),
       className: tier?.className ?? defaultTier.className,
       percent
     };
-  }, [newPasswordValue]);
+  }, [newPasswordValue, t]);
 
   const handleFormSubmit = async (values: ChangePasswordFormValues) => {
     await onSubmit?.(values);
@@ -125,21 +134,21 @@ export default function ChangePasswordForm({
       className="space-y-6 rounded-lg border bg-card p-6 shadow-sm"
     >
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">Change password</h2>
+        <h2 className="text-lg font-semibold">{t('changePassword.title')}</h2>
         <p className="text-sm text-muted-foreground">
-          Update your password to keep your account secure.
+          {t('changePassword.description')}
         </p>
       </div>
 
       <div className="space-y-2">
         <label htmlFor="currentPassword" className="text-sm font-medium">
-          Current password
+          {t('changePassword.currentPassword')}
         </label>
         <input
           id="currentPassword"
           type="password"
           autoComplete="current-password"
-          placeholder="Enter your current password"
+          placeholder={t('changePassword.currentPasswordPlaceholder')}
           className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           {...register('currentPassword')}
         />
@@ -150,13 +159,13 @@ export default function ChangePasswordForm({
 
       <div className="space-y-2">
         <label htmlFor="newPassword" className="text-sm font-medium">
-          New password
+          {t('changePassword.newPassword')}
         </label>
         <input
           id="newPassword"
           type="password"
           autoComplete="new-password"
-          placeholder="Create a new password"
+          placeholder={t('changePassword.newPasswordPlaceholder')}
           className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           {...register('newPassword')}
         />
@@ -165,7 +174,7 @@ export default function ChangePasswordForm({
         )}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Password strength</span>
+            <span>{t('changePassword.passwordStrength')}</span>
             <span>{strength.label}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -179,13 +188,13 @@ export default function ChangePasswordForm({
 
       <div className="space-y-2">
         <label htmlFor="confirmPassword" className="text-sm font-medium">
-          Confirm new password
+          {t('changePassword.confirmPassword')}
         </label>
         <input
           id="confirmPassword"
           type="password"
           autoComplete="new-password"
-          placeholder="Re-enter your new password"
+          placeholder={t('changePassword.confirmPasswordPlaceholder')}
           className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           {...register('confirmPassword')}
         />
@@ -211,7 +220,7 @@ export default function ChangePasswordForm({
         disabled={isLoading}
         className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? 'Changing password...' : submitLabel}
+        {isLoading ? t('changePassword.changing') : submitLabel ?? t('changePassword.submit')}
       </button>
     </form>
   );

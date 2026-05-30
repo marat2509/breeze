@@ -2,12 +2,15 @@
 import AuthLayout from '../layouts/AuthLayout.astro';
 import PartnerRegisterPage from '../components/auth/PartnerRegisterPage';
 import { ENABLE_REGISTRATION } from '../lib/featureFlags';
+import { resolveLocaleFromRequest } from '../i18n/locales';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 
 if (!ENABLE_REGISTRATION) {
   return Astro.redirect('/login?reason=registration-disabled', 302);
 }
 ---
 
-<AuthLayout title="Register Your Company">
+<AuthLayout title="Register Your Company" locale={locale}>
   <PartnerRegisterPage client:load />
 </AuthLayout>

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import LoginPage from './LoginPage';
 import PartnerRegisterPage from './PartnerRegisterPage';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
 
 interface AuthPageProps {
   next?: string;
+  locale?: Locale;
 }
 
 type Tab = 'signin' | 'signup';
@@ -13,7 +16,8 @@ function getInitialTab(): Tab {
   return window.location.hash === '#signup' ? 'signup' : 'signin';
 }
 
-export default function AuthPage({ next }: AuthPageProps) {
+export default function AuthPage({ next, locale: initialLocale = 'en' }: AuthPageProps) {
+  const { locale, t } = useI18n(initialLocale);
   const [tab, setTab] = useState<Tab>(getInitialTab);
 
   useEffect(() => {
@@ -42,7 +46,7 @@ export default function AuthPage({ next }: AuthPageProps) {
             tab === 'signin' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Sign in
+          {t('auth.signIn')}
         </button>
         <button
           type="button"
@@ -54,12 +58,12 @@ export default function AuthPage({ next }: AuthPageProps) {
             tab === 'signup' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          Create account
+          {t('auth.createAccount')}
         </button>
       </div>
 
       {tab === 'signin' ? (
-        <LoginPage next={next} />
+        <LoginPage next={next} locale={locale} />
       ) : (
         <PartnerRegisterPage next={next} />
       )}

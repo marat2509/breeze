@@ -1,8 +1,12 @@
 ---
 import SetupLayout from '../layouts/SetupLayout.astro';
 import SetupWizard from '../components/setup/SetupWizard';
+import { resolveLocaleFromRequest } from '../i18n/locales';
+import { translate } from '../i18n/resources';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<SetupLayout title="Initial Setup">
+<SetupLayout title={translate(locale, 'app.setupDescription')} locale={locale}>
   <SetupWizard client:load />
 </SetupLayout>

@@ -1,10 +1,13 @@
 ---
 import AuthShellBranded from '../layouts/AuthShellBranded.astro';
 import LoginPage from '../components/auth/LoginPage';
+import { resolveLocaleFromRequest } from '../i18n/locales';
+import { translate } from '../i18n/resources';
 
 const next = Astro.url.searchParams.get('next') ?? undefined;
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<AuthShellBranded title="Sign In">
-  <LoginPage client:load next={next} />
+<AuthShellBranded title={translate(locale, 'auth.signIn')} locale={locale}>
+  <LoginPage client:load next={next} locale={locale} />
 </AuthShellBranded>

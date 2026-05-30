@@ -1,14 +1,18 @@
 ---
 import AuthShellBranded from '../layouts/AuthShellBranded.astro';
 import AuthPage from '../components/auth/AuthPage';
+import { resolveLocaleFromRequest } from '../i18n/locales';
+import { translate } from '../i18n/resources';
 
 const next = Astro.url.searchParams.get('next') ?? undefined;
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
 <AuthShellBranded
-  title="Sign in or create account"
-  description="Breeze RMM - Sign in or create your account"
-  tagline="Sign in or create your account to get started."
+  title={translate(locale, 'auth.signInOrCreateAccount')}
+  description={translate(locale, 'auth.signInOrCreateDescription')}
+  tagline={translate(locale, 'auth.signInOrCreateTagline')}
+  locale={locale}
 >
-  <AuthPage client:load next={next} />
+  <AuthPage client:load next={next} locale={locale} />
 </AuthShellBranded>

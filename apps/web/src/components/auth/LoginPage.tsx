@@ -6,23 +6,28 @@ import { useAuthStore, apiLogin, apiVerifyMFA, apiSendSmsMfaCode, fetchAndApplyP
 import type { MfaMethod } from '../../stores/auth';
 import { navigateTo } from '../../lib/navigation';
 import { getSafeNext } from '../../lib/authNext';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
+import { translate } from '../../i18n/resources';
 
-function getRegistrationDisabledNotice(): string | undefined {
+function getRegistrationDisabledNotice(locale: Locale): string | undefined {
   if (typeof window === 'undefined') return undefined;
   const params = new URLSearchParams(window.location.search);
   if (params.get('reason') === 'registration-disabled') {
-    return 'New registrations are currently disabled. Please contact your administrator.';
+    return translate(locale, 'auth.registrationDisabled');
   }
 }
 
 interface LoginPageProps {
   next?: string;
+  locale?: Locale;
 }
 
-export default function LoginPage({ next }: LoginPageProps = {}) {
+export default function LoginPage({ next, locale: initialLocale = 'en' }: LoginPageProps = {}) {
+  const { locale, t } = useI18n(initialLocale);
   const safeNext = getSafeNext(next);
   const [error, setError] = useState<string>();
-  const registrationNotice = getRegistrationDisabledNotice();
+  const registrationNotice = getRegistrationDisabledNotice(locale);
   const [loading, setLoading] = useState(false);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [tempToken, setTempToken] = useState<string>();
@@ -112,8 +117,8 @@ export default function LoginPage({ next }: LoginPageProps = {}) {
     return (
       <div>
         <div className="mb-8">
-          <p className="text-sm font-medium text-muted-foreground">Almost there</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">Verify your identity</h1>
+          <p className="text-sm font-medium text-muted-foreground">{t('auth.almostThere')}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">{t('auth.verifyIdentity')}</h1>
         </div>
         <MFAVerifyForm
           onSubmit={handleMfaVerify}
@@ -124,6 +129,7 @@ export default function LoginPage({ next }: LoginPageProps = {}) {
           onSendSmsCode={handleSendSmsCode}
           smsSending={smsSending}
           smsSent={smsSent}
+          locale={locale}
         />
       </div>
     );
@@ -132,8 +138,8 @@ export default function LoginPage({ next }: LoginPageProps = {}) {
   return (
     <div data-testid="login-page">
       <div className="mb-8">
-        <p className="text-sm font-medium text-muted-foreground">Welcome back</p>
-        <h1 data-testid="login-heading" className="mt-1 text-2xl font-bold tracking-tight">Sign in to Breeze</h1>
+        <p className="text-sm font-medium text-muted-foreground">{t('auth.welcomeBack')}</p>
+        <h1 data-testid="login-heading" className="mt-1 text-2xl font-bold tracking-tight">{t('auth.signInToBreeze')}</h1>
       </div>
 
       {registrationNotice && (
@@ -145,6 +151,7 @@ export default function LoginPage({ next }: LoginPageProps = {}) {
         onSubmit={handleLogin}
         errorMessage={error}
         loading={loading}
+        locale={locale}
       />
       <McpUrlCard variant="compact" requireOAuth className="mt-8" />
     </div>

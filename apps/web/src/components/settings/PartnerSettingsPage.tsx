@@ -34,6 +34,8 @@ import type {
 } from '@breeze/shared';
 import { navigateTo } from '@/lib/navigation';
 import { runAction, ActionError } from '@/lib/runAction';
+import { getLocaleDisplayName, normalizeLocale, SUPPORTED_LOCALES, type Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
 
 type TabKey = 'company' | 'regional' | 'security' | 'notifications' | 'eventLogs' | 'defaults' | 'branding' | 'aiBudgets' | 'remoteAccess';
 
@@ -47,16 +49,16 @@ type Partner = {
   createdAt: string;
 };
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'company', label: 'Company' },
-  { key: 'regional', label: 'Regional' },
-  { key: 'security', label: 'Security' },
-  { key: 'notifications', label: 'Notifications' },
-  { key: 'eventLogs', label: 'Event Logs' },
-  { key: 'defaults', label: 'Defaults' },
-  { key: 'branding', label: 'Branding' },
-  { key: 'aiBudgets', label: 'AI Budgets' },
-  { key: 'remoteAccess', label: 'Remote' },
+const TABS: { key: TabKey; labelKey: string }[] = [
+  { key: 'company', labelKey: 'partnerSettings.tabs.company' },
+  { key: 'regional', labelKey: 'partnerSettings.tabs.regional' },
+  { key: 'security', labelKey: 'partnerSettings.tabs.security' },
+  { key: 'notifications', labelKey: 'partnerSettings.tabs.notifications' },
+  { key: 'eventLogs', labelKey: 'partnerSettings.tabs.eventLogs' },
+  { key: 'defaults', labelKey: 'partnerSettings.tabs.defaults' },
+  { key: 'branding', labelKey: 'partnerSettings.tabs.branding' },
+  { key: 'aiBudgets', labelKey: 'partnerSettings.tabs.aiBudgets' },
+  { key: 'remoteAccess', labelKey: 'partnerSettings.tabs.remoteAccess' },
 ];
 
 const TIMEZONES = [
@@ -72,15 +74,14 @@ const DATE_FORMATS: { value: DateFormat; label: string }[] = [
   { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (ISO)' }
 ];
 
-const BUSINESS_HOURS_PRESETS: { value: BusinessHoursPreset; label: string; description: string }[] = [
-  { value: '24/7', label: '24/7', description: 'Always available' },
-  { value: 'business', label: 'Business Hours', description: 'Mon-Fri 9am-5pm' },
-  { value: 'extended', label: 'Extended Hours', description: 'Mon-Fri 7am-7pm, Sat 9am-1pm' },
-  { value: 'custom', label: 'Custom', description: 'Set your own schedule' }
+const BUSINESS_HOURS_PRESETS: { value: BusinessHoursPreset; labelKey: string; descriptionKey: string }[] = [
+  { value: '24/7', labelKey: '24/7', descriptionKey: 'partnerSettings.businessHoursPresets.always' },
+  { value: 'business', labelKey: 'partnerSettings.businessHoursPresets.business', descriptionKey: 'partnerSettings.businessHoursPresets.businessDescription' },
+  { value: 'extended', labelKey: 'partnerSettings.businessHoursPresets.extended', descriptionKey: 'partnerSettings.businessHoursPresets.extendedDescription' },
+  { value: 'custom', labelKey: 'partnerSettings.businessHoursPresets.custom', descriptionKey: 'partnerSettings.businessHoursPresets.customDescription' }
 ];
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-const DAY_LABELS: Record<string, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 const BH: DaySchedule = { start: '09:00', end: '17:00' };
 const BH_CLOSED: DaySchedule = { start: '09:00', end: '17:00', closed: true };
 const DEFAULT_BUSINESS_HOURS: Record<string, DaySchedule> = { mon: BH, tue: BH, wed: BH, thu: BH, fri: BH, sat: BH_CLOSED, sun: BH_CLOSED };
@@ -103,7 +104,12 @@ export async function runPartnerSave(
   });
 }
 
-export default function PartnerSettingsPage() {
+type PartnerSettingsPageProps = {
+  locale?: Locale;
+};
+
+export default function PartnerSettingsPage({ locale: initialLocale = 'en' }: PartnerSettingsPageProps = {}) {
+  const { locale, t } = useI18n(initialLocale);
   const { currentPartnerId, isLoading: contextLoading, setPartner: setPartnerContext } = useOrgStore();
   const [partner, setPartner] = useState<Partner | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,6 +121,7 @@ export default function PartnerSettingsPage() {
   const [timezone, setTimezone] = useState('UTC');
   const [dateFormat, setDateFormat] = useState<DateFormat>('MM/DD/YYYY');
   const [timeFormat, setTimeFormat] = useState<TimeFormat>('12h');
+  const [language, setLanguage] = useState<Locale>('en');
   const [businessHoursPreset, setBusinessHoursPreset] = useState<BusinessHoursPreset>('business');
   const [customHours, setCustomHours] = useState<Record<string, DaySchedule>>(DEFAULT_BUSINESS_HOURS);
   const [contactName, setContactName] = useState('');
@@ -140,8 +147,8 @@ export default function PartnerSettingsPage() {
       const response = await fetchWithAuth('/orgs/partners/me');
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        if (response.status === 403) { setError('You do not have permission to view partner settings'); return; }
-        throw new Error('Failed to fetch partner settings');
+        if (response.status === 403) { setError(t('partnerSettings.noPermission')); return; }
+        throw new Error(t('partnerSettings.fetchFailed'));
       }
       const data: Partner = await response.json();
       setPartner(data);
@@ -151,6 +158,7 @@ export default function PartnerSettingsPage() {
       setTimezone(settings.timezone || 'UTC');
       setDateFormat(settings.dateFormat || 'MM/DD/YYYY');
       setTimeFormat(settings.timeFormat || '12h');
+      setLanguage(normalizeLocale(settings.language) ?? 'en');
       setBusinessHoursPreset(settings.businessHours?.preset || 'business');
       if (settings.businessHours?.custom) {
         setCustomHours({ ...DEFAULT_BUSINESS_HOURS, ...settings.businessHours.custom });
@@ -170,11 +178,11 @@ export default function PartnerSettingsPage() {
       setAiBudgetsData(settings.aiBudgets || {});
       setRemoteAccessData(settings.remoteAccessProviders || {});
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('partnerSettings.unknownError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (currentPartnerId) {
@@ -202,7 +210,7 @@ export default function PartnerSettingsPage() {
     setError(undefined);
 
     const settings: Record<string, unknown> = {
-      timezone, dateFormat, timeFormat, language: 'en',
+      timezone, dateFormat, timeFormat, language,
       businessHours: {
         preset: businessHoursPreset,
         ...(businessHoursPreset === 'custom' ? { custom: customHours } : {})
@@ -260,9 +268,9 @@ export default function PartnerSettingsPage() {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-950">
         <Building2 className="mx-auto h-12 w-12 text-amber-500" />
-        <h2 className="mt-4 text-lg font-semibold">Partner Access Required</h2>
+        <h2 className="mt-4 text-lg font-semibold">{t('partnerSettings.accessRequired')}</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Partner settings are only available to partner-level users.
+          {t('partnerSettings.accessDescription')}
         </p>
       </div>
     );
@@ -273,7 +281,7 @@ export default function PartnerSettingsPage() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading partner settings...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('partnerSettings.loading')}</p>
         </div>
       </div>
     );
@@ -285,7 +293,7 @@ export default function PartnerSettingsPage() {
         <p className="text-sm text-destructive">{error}</p>
         <button type="button" onClick={fetchPartner}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
-          Try again
+          {t('partnerSettings.tryAgain')}
         </button>
       </div>
     );
@@ -295,15 +303,15 @@ export default function PartnerSettingsPage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Partner Settings</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('partnerSettings.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Configure defaults for {partner?.name || 'your MSP'}.
+            {t('partnerSettings.description', { name: partner?.name || t('partnerSettings.yourMsp') })}
           </p>
         </div>
         <button type="button" onClick={handleSave} disabled={saving}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {saving ? 'Saving...' : 'Save Settings'}
+          {saving ? t('partnerSettings.saving') : t('partnerSettings.saveSettings')}
         </button>
       </header>
 
@@ -327,14 +335,14 @@ export default function PartnerSettingsPage() {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
           >
-            {tab.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
 
       {activeTab !== 'regional' && activeTab !== 'company' && (
         <div className="rounded-md border bg-blue-50 dark:bg-blue-950/30 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
-          Values you set here are enforced across all organizations. Leave fields empty to let each organization configure individually.
+          {t('partnerSettings.inheritedHint')}
         </div>
       )}
 
@@ -367,48 +375,55 @@ export default function PartnerSettingsPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2">
                 <Globe className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Regional Settings</h2>
+                <h2 className="text-lg font-semibold">{t('partnerSettings.regionalSettings')}</h2>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                These defaults apply to new organizations and sites.
+                {t('partnerSettings.regionalDescription')}
               </p>
             </div>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Timezone</label>
+                <label className="text-sm font-medium">{t('partnerSettings.timezone')}</label>
                 <select value={timezone} onChange={e => setTimezone(e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                   {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Date Format</label>
+                <label className="text-sm font-medium">{t('partnerSettings.dateFormat')}</label>
                 <select value={dateFormat} onChange={e => setDateFormat(e.target.value as DateFormat)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                   {DATE_FORMATS.map(fmt => <option key={fmt.value} value={fmt.value}>{fmt.label}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Time Format</label>
+                <label className="text-sm font-medium">{t('partnerSettings.timeFormat')}</label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2">
                     <input type="radio" name="timeFormat" checked={timeFormat === '12h'}
                       onChange={() => setTimeFormat('12h')} className="h-4 w-4" />
-                    <span className="text-sm">12-hour</span>
+                    <span className="text-sm">{t('partnerSettings.twelveHour')}</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input type="radio" name="timeFormat" checked={timeFormat === '24h'}
                       onChange={() => setTimeFormat('24h')} className="h-4 w-4" />
-                    <span className="text-sm">24-hour</span>
+                    <span className="text-sm">{t('partnerSettings.twentyFourHour')}</span>
                   </label>
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Language</label>
-                <div className="flex h-10 w-full items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground">
-                  English
-                </div>
-                <p className="text-xs text-muted-foreground">Default language for partner settings.</p>
+                <label htmlFor="partner-language" className="text-sm font-medium">{t('common.language')}</label>
+                <select
+                  id="partner-language"
+                  value={language}
+                  onChange={e => setLanguage(e.target.value as Locale)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {SUPPORTED_LOCALES.map(option => (
+                    <option key={option} value={option}>{getLocaleDisplayName(option, locale)}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">{t('partnerSettings.languageHint')}</p>
               </div>
             </div>
           </section>
@@ -418,10 +433,10 @@ export default function PartnerSettingsPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Business Hours</h2>
+                <h2 className="text-lg font-semibold">{t('partnerSettings.businessHours')}</h2>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Set your standard operating hours for support and alerts.
+                {t('partnerSettings.businessHoursDescription')}
               </p>
             </div>
             <div className="space-y-4">
@@ -435,28 +450,28 @@ export default function PartnerSettingsPage() {
                     <input type="radio" name="businessHoursPreset" value={preset.value}
                       checked={businessHoursPreset === preset.value}
                       onChange={() => setBusinessHoursPreset(preset.value)} className="sr-only" />
-                    <div className="font-medium">{preset.label}</div>
-                    <div className="text-xs text-muted-foreground">{preset.description}</div>
+                    <div className="font-medium">{t(preset.labelKey)}</div>
+                    <div className="text-xs text-muted-foreground">{t(preset.descriptionKey)}</div>
                   </label>
                 ))}
               </div>
               {businessHoursPreset === 'custom' && (
                 <div className="mt-4 space-y-3 rounded-lg border bg-muted/40 p-4">
-                  <p className="text-sm font-medium">Custom Schedule</p>
+                  <p className="text-sm font-medium">{t('partnerSettings.customSchedule')}</p>
                   {DAYS.map(day => (
                     <div key={day} className="flex items-center gap-4">
-                      <div className="w-24 text-sm font-medium">{DAY_LABELS[day]}</div>
+                      <div className="w-24 text-sm font-medium">{t(`partnerSettings.days.${day}`)}</div>
                       <label className="flex items-center gap-2">
                         <input type="checkbox" checked={!customHours[day]?.closed}
                           onChange={e => updateCustomHours(day, 'closed', !e.target.checked)} className="h-4 w-4" />
-                        <span className="text-sm">Open</span>
+                        <span className="text-sm">{t('partnerSettings.open')}</span>
                       </label>
                       {!customHours[day]?.closed && (
                         <>
                           <input type="time" value={customHours[day]?.start || '09:00'}
                             onChange={e => updateCustomHours(day, 'start', e.target.value)}
                             className="h-8 rounded-md border bg-background px-2 text-sm" />
-                          <span className="text-sm text-muted-foreground">to</span>
+                          <span className="text-sm text-muted-foreground">{t('partnerSettings.to')}</span>
                           <input type="time" value={customHours[day]?.end || '17:00'}
                             onChange={e => updateCustomHours(day, 'end', e.target.value)}
                             className="h-8 rounded-md border bg-background px-2 text-sm" />

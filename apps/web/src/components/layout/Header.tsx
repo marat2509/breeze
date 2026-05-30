@@ -22,6 +22,7 @@ import {
 import OrgSwitcher from './OrgSwitcher';
 import NotificationCenter from './NotificationCenter';
 import CommandPalette from './CommandPalette';
+import LanguageSelector from './LanguageSelector';
 import SupportModal from '../support/SupportModal';
 import { useAuthStore, apiLogout, fetchWithAuth } from '../../stores/auth';
 import { useAiStore } from '../../stores/aiStore';
@@ -30,8 +31,15 @@ import { useUiStore } from '../../stores/uiStore';
 import { useFeaturesStore } from '../../stores/featuresStore';
 import { showToast } from '../shared/Toast';
 import { navigateTo } from '../../lib/navigation';
+import type { Locale } from '../../i18n/locales';
+import { useI18n } from '../../i18n/react';
 
-export default function Header() {
+interface HeaderProps {
+  locale?: Locale;
+}
+
+export default function Header({ locale: initialLocale = 'en' }: HeaderProps) {
+  const { locale, t } = useI18n(initialLocale);
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('light');
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -77,12 +85,12 @@ export default function Header() {
         console.error('[billing] portal failed', { status: res.status, body });
         const code = typeof body.error === 'string' ? body.error : '';
         const messages: Record<string, string> = {
-          no_billing_record: 'No active subscription — contact support.',
-          not_configured: 'Billing is not available on this deployment.',
-          upstream_unavailable: 'Billing service is temporarily unavailable. Please try again in a moment.',
-          rate_limited: 'Too many requests. Please wait a few minutes and try again.',
+          no_billing_record: t('header.billingNoRecord'),
+          not_configured: t('header.billingUnavailable'),
+          upstream_unavailable: t('header.billingTemporary'),
+          rate_limited: t('header.billingRateLimited'),
         };
-        const message = messages[code] ?? (code || 'Failed to open billing portal');
+        const message = messages[code] ?? (code || t('header.billingFailed'));
         showToast({ type: 'error', message });
         return;
       }
@@ -91,11 +99,11 @@ export default function Header() {
         window.location.href = data.url;
       } else {
         console.error('[billing] upstream returned no url', data);
-        showToast({ type: 'error', message: 'Billing portal URL missing from response' });
+        showToast({ type: 'error', message: t('header.billingUrlMissing') });
       }
     } catch (err) {
       console.error('[billing] portal request threw', err);
-      showToast({ type: 'error', message: 'Failed to open billing portal' });
+      showToast({ type: 'error', message: t('header.billingFailed') });
     } finally {
       setBillingLoading(false);
     }
@@ -182,7 +190,7 @@ export default function Header() {
         <button
           className="rounded-md p-2 hover:bg-muted transition-colors md:hidden"
           onClick={toggleMobileMenu}
-          title="Menu"
+          title={t('header.menu')}
         >
           <Menu className="h-5 w-5 text-muted-foreground" />
         </button>
@@ -194,7 +202,7 @@ export default function Header() {
 
         {/* Global Search */}
         <div data-tour="search" className="min-w-0 flex-1 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-[28rem]">
-          <CommandPalette />
+          <CommandPalette locale={locale} />
         </div>
       </div>
 
@@ -206,7 +214,7 @@ export default function Header() {
             data-tour="ai-assistant"
             onClick={toggleAi}
             className="relative rounded-md p-2 hover:bg-muted transition-colors"
-            title="AI Assistant (Cmd+Shift+A)"
+            title={t('header.aiAssistant')}
           >
             <Sparkles className="h-5 w-5" />
             {isAiOpen && (
@@ -218,13 +226,15 @@ export default function Header() {
         {/* Notifications */}
         {mounted && isAuthenticated && <NotificationCenter />}
 
+        {mounted && isAuthenticated && <LanguageSelector locale={locale} compact />}
+
         {/* Theme Picker */}
         <div className="relative" ref={themeRef}>
           <button
             type="button"
             onClick={() => setShowThemeMenu(!showThemeMenu)}
             className="rounded-md p-2 hover:bg-muted"
-            title="Theme"
+            title={t('header.theme')}
             aria-expanded={showThemeMenu}
             aria-haspopup="true"
           >
@@ -238,9 +248,9 @@ export default function Header() {
           {showThemeMenu && (
             <div className="absolute right-0 top-full z-50 mt-2 w-36 rounded-lg border bg-popover py-1 shadow-lg">
               {([
-                { value: 'light' as const, label: 'Light', Icon: Sun },
-                { value: 'dark' as const, label: 'Dark', Icon: Moon },
-                { value: 'system' as const, label: 'System', Icon: Monitor },
+                { value: 'light' as const, label: t('header.light'), Icon: Sun },
+                { value: 'dark' as const, label: t('header.dark'), Icon: Moon },
+                { value: 'system' as const, label: t('header.system'), Icon: Monitor },
               ]).map(({ value, label, Icon }) => (
                 <button
                   key={value}
@@ -263,7 +273,7 @@ export default function Header() {
             type="button"
             onClick={toggleHelp}
             className="relative rounded-md p-2 hover:bg-muted transition-colors"
-            title="Help & Docs (Cmd+Shift+H)"
+            title={t('header.helpDocs')}
           >
             <BookOpen className="h-5 w-5" />
             {isHelpOpen && (
@@ -278,7 +288,7 @@ export default function Header() {
             type="button"
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2 rounded-md p-2 hover:bg-muted"
-            title="Account menu"
+            title={t('header.accountMenu')}
             aria-expanded={showUserMenu}
             aria-haspopup="true"
           >
@@ -314,17 +324,17 @@ export default function Header() {
                   )}
                   <div className="flex-1 overflow-hidden">
                     <p className="truncate text-sm font-medium">
-                      {user?.name || 'Guest'}
+                      {user?.name || t('header.guest')}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {user?.email || 'Not signed in'}
+                      {user?.email || t('header.notSignedIn')}
                     </p>
                   </div>
                 </div>
                 {user?.mfaEnabled && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
                     <Shield className="h-3 w-3" />
-                    <span>2FA enabled</span>
+                    <span>{t('header.twoFactorEnabled')}</span>
                   </div>
                 )}
               </div>
@@ -337,7 +347,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <User className="h-4 w-4 text-muted-foreground" />
-                  <span>Profile</span>
+                  <span>{t('header.profile')}</span>
                 </a>
                 <a
                   href="/settings"
@@ -345,7 +355,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Settings className="h-4 w-4 text-muted-foreground" />
-                  <span>Settings</span>
+                  <span>{t('header.settings')}</span>
                 </a>
                 <a
                   href="/settings/api-keys"
@@ -353,7 +363,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Key className="h-4 w-4 text-muted-foreground" />
-                  <span>API Keys</span>
+                  <span>{t('header.apiKeys')}</span>
                 </a>
                 <a
                   href="/account/devices"
@@ -361,7 +371,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Smartphone className="h-4 w-4 text-muted-foreground" />
-                  <span>Trusted devices</span>
+                  <span>{t('header.trustedDevices')}</span>
                 </a>
                 <a
                   href="/account/connected-apps"
@@ -369,7 +379,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Plug className="h-4 w-4 text-muted-foreground" />
-                  <span>Connected apps</span>
+                  <span>{t('header.connectedApps')}</span>
                 </a>
                 {features.billing && (
                   <button
@@ -382,7 +392,7 @@ export default function Header() {
                     }}
                   >
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    <span>{billingLoading ? 'Opening…' : 'Billing'}</span>
+                    <span>{billingLoading ? t('header.opening') : t('header.billing')}</span>
                   </button>
                 )}
                 {features.support && (
@@ -395,7 +405,7 @@ export default function Header() {
                     }}
                   >
                     <LifeBuoy className="h-4 w-4 text-muted-foreground" />
-                    <span>Contact support</span>
+                    <span>{t('header.contactSupport')}</span>
                   </button>
                 )}
               </div>
@@ -408,7 +418,7 @@ export default function Header() {
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Activity className="h-4 w-4 text-muted-foreground" />
-                  <span>Activity Log</span>
+                  <span>{t('header.activityLog')}</span>
                 </a>
               </div>
 
@@ -421,7 +431,7 @@ export default function Header() {
                   className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-destructive transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <LogOut className="h-4 w-4" />
-                  <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
+                  <span>{isLoggingOut ? t('header.signingOut') : t('header.signOut')}</span>
                 </button>
               </div>
             </div>

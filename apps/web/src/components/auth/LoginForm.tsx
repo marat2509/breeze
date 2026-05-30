@@ -3,27 +3,35 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ENABLE_REGISTRATION } from '../../lib/featureFlags';
+import type { Locale } from '../../i18n/locales';
+import { translate } from '../../i18n/resources';
 
-const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters')
-});
+function buildLoginSchema(locale: Locale) {
+  return z.object({
+    email: z.string().email(translate(locale, 'auth.invalidEmail')),
+    password: z.string().min(8, translate(locale, 'auth.shortPassword'))
+  });
+}
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = z.infer<ReturnType<typeof buildLoginSchema>>;
 
 type LoginFormProps = {
   onSubmit?: (values: LoginFormValues) => void | Promise<void>;
   errorMessage?: string;
   submitLabel?: string;
   loading?: boolean;
+  locale?: Locale;
 };
 
 export default function LoginForm({
   onSubmit,
   errorMessage,
-  submitLabel = 'Sign in',
-  loading
+  submitLabel,
+  loading,
+  locale = 'en'
 }: LoginFormProps) {
+  const loginSchema = useMemo(() => buildLoginSchema(locale), [locale]);
+  const t = (key: string) => translate(locale, key);
   const {
     register,
     handleSubmit,
@@ -47,13 +55,13 @@ export default function LoginForm({
     >
       <div className="space-y-2">
         <label htmlFor="email" className="text-sm font-medium">
-          Email
+          {t('auth.email')}
         </label>
         <input
           id="email"
           type="email"
           autoComplete="email"
-          placeholder="you@company.com"
+          placeholder={t('auth.emailPlaceholder')}
           data-testid="login-email-input"
           className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           {...register('email')}
@@ -66,17 +74,17 @@ export default function LoginForm({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label htmlFor="password" className="text-sm font-medium">
-            Password
+            {t('auth.password')}
           </label>
           <a href="/forgot-password" className="text-sm text-primary hover:underline">
-            Forgot password?
+            {t('auth.forgotPassword')}
           </a>
         </div>
         <input
           id="password"
           type="password"
           autoComplete="current-password"
-          placeholder="Enter your password"
+          placeholder={t('auth.passwordPlaceholder')}
           data-testid="login-password-input"
           className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           {...register('password')}
@@ -101,15 +109,15 @@ export default function LoginForm({
         data-testid="login-submit"
         className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? 'Signing in...' : submitLabel}
+        {isLoading ? t('auth.signingIn') : submitLabel ?? t('auth.signIn')}
       </button>
 
       {ENABLE_REGISTRATION && (
         <div className="space-y-2 text-center text-sm text-muted-foreground">
           <p>
-            New here?{' '}
+            {t('auth.newHere')}{' '}
             <a href="/register-partner" className="font-medium text-primary hover:underline">
-              Register your MSP
+              {t('auth.registerMsp')}
             </a>
           </p>
         </div>

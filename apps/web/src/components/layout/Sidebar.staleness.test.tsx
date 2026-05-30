@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
 vi.mock('../../stores/auth', () => ({
-  fetchWithAuth: vi.fn(),
+  fetchWithAuth: vi.fn().mockResolvedValue({
+    ok: true,
+    json: vi.fn().mockResolvedValue({ version: '0.0.0', latest: null }),
+  }),
   useAuthStore: { getState: () => ({ tokens: null }) },
 }));
 
@@ -10,7 +13,7 @@ vi.mock('../../stores/uiStore', () => ({
   useUiStore: vi.fn(() => ({ isMobileMenuOpen: false, closeMobileMenu: vi.fn() })),
 }));
 
-import { VersionSpan } from './Sidebar';
+import Sidebar, { VersionSpan } from './Sidebar';
 
 describe('VersionSpan', () => {
   it('renders muted with "unknown" tooltip when latest is null', () => {
@@ -50,5 +53,27 @@ describe('VersionSpan', () => {
     const span = container.querySelector('span')!;
     expect(span.className).toBe('');
     expect(span.getAttribute('title')).toContain('latest version unknown');
+  });
+});
+
+describe('Sidebar i18n', () => {
+  it('renders Russian navigation labels when locale is Russian', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const { getByText } = render(<Sidebar currentPath="/" locale="ru" />);
+
+    expect(getByText('Устройства')).toBeTruthy();
+    expect(getByText('Оповещения')).toBeTruthy();
+    expect(getByText('Настройки')).toBeTruthy();
   });
 });

@@ -9,12 +9,15 @@ import AiChatSidebar from '../components/ai/AiChatSidebar';
 import HelpPanel from '../components/help/HelpPanel';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
 import ToastContainer from '../components/shared/Toast';
+import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
 
 interface Props {
   title: string;
+  locale?: Locale;
 }
 
-const { title } = Astro.props;
+const { title, locale: propLocale } = Astro.props;
+const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
 const currentPath = Astro.url.pathname;
 
 // Domain-specific accent color for wayfinding — thin 2px bar at top of content area
@@ -32,14 +35,14 @@ const getAccentClass = (path: string): string => {
 const accentClass = getAccentClass(currentPath);
 ---
 
-<Layout title={title}>
+<Layout title={title} locale={locale}>
   <AuthOverlay client:load transition:persist />
   <AccountInactiveGuard client:load transition:persist />
   <AdminSessionManager client:load transition:persist />
   <div class="flex h-screen overflow-hidden">
-    <Sidebar currentPath={currentPath} client:load transition:persist />
+    <Sidebar currentPath={currentPath} locale={locale} client:load transition:persist />
     <div class="flex flex-1 flex-col overflow-hidden">
-      <Header client:load transition:persist />
+      <Header locale={locale} client:load transition:persist />
       <main class="flex-1 overflow-y-auto p-4 md:p-6">
         {accentClass && <div class={`h-0.5 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-4 md:mb-6 ${accentClass}`} aria-hidden="true" />}
         <slot />
