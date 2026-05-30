@@ -3,7 +3,8 @@ import { X, Loader2, Plus, Tag, Trash2 } from 'lucide-react';
 import type { Device } from './DeviceList';
 import { Dialog } from '../shared/Dialog';
 import { fetchWithAuth } from '../../stores/auth';
-import { extractApiError } from '@/lib/apiError';
+import { extractLocalizedApiError } from '@/lib/apiError';
+import { useI18n } from '@/i18n/react';
 
 type Site = {
   id: string;
@@ -19,6 +20,7 @@ type DeviceSettingsModalProps = {
 };
 
 export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, onAction }: DeviceSettingsModalProps) {
+  const { locale, t } = useI18n();
   const [displayName, setDisplayName] = useState(device.displayName || device.hostname);
   const [siteId, setSiteId] = useState(device.siteId);
   const [tags, setTags] = useState<string[]>(device.tags ?? []);
@@ -39,10 +41,10 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
     // Scope to the device's org — the PATCH endpoint rejects cross-org moves,
     // so showing other orgs' sites would just surface invalid choices.
     fetchWithAuth(`/orgs/sites?organizationId=${device.orgId}`)
-      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load sites')))
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(t('devices.settingsModal.loadSitesFailed'))))
       .then(data => setSites(data.data ?? data.sites ?? data ?? []))
       .catch(() => setSites([]));
-  }, [isOpen, device]);
+  }, [isOpen, device, t]);
 
   const handleAddTag = () => {
     const trimmed = newTag.trim().toLowerCase();
@@ -89,26 +91,29 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(extractApiError(data, 'Failed to save settings'));
+        throw new Error(extractLocalizedApiError(data, t('devices.settingsModal.saveFailed'), locale));
       }
 
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save settings');
+      setError(err instanceof Error ? err.message : t('devices.settingsModal.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
+  const title = t('devices.settingsModal.title');
+
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Device Settings" className="p-6">
+    <Dialog open={isOpen} onClose={onClose} title={title} className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">Device Settings</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
+            aria-label={t('common.dismiss')}
             className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted disabled:cursor-not-allowed"
           >
             <X className="h-4 w-4" />
@@ -119,7 +124,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
           {/* Display Name */}
           <div>
             <label htmlFor="displayName" className="block text-sm font-medium mb-1.5">
-              Display Name
+              {t('devices.settingsModal.displayName')}
             </label>
             <input
               id="displayName"
@@ -130,14 +135,14 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
               placeholder={device.hostname}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Hostname: {device.hostname}
+              {t('devices.settingsModal.hostname', { hostname: device.hostname })}
             </p>
           </div>
 
           {/* Site */}
           <div>
             <label htmlFor="siteId" className="block text-sm font-medium mb-1.5">
-              Site
+              {t('devices.settingsModal.site')}
             </label>
             <select
               id="siteId"
@@ -156,7 +161,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium mb-1.5">Tags</label>
+            <label className="block text-sm font-medium mb-1.5">{t('devices.settingsModal.tags')}</label>
             <div className="flex flex-wrap gap-2 mb-2">
               {tags.map(tag => (
                 <span
@@ -182,7 +187,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
                 onChange={e => setNewTag(e.target.value)}
                 onKeyDown={handleTagKeyDown}
                 className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Add a tag..."
+                placeholder={t('devices.settingsModal.addTagPlaceholder')}
               />
               <button
                 type="button"
@@ -191,7 +196,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
                 className="flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" />
-                Add
+                {t('devices.settingsModal.addTag')}
               </button>
             </div>
           </div>
@@ -205,9 +210,9 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
           {/* Danger Zone */}
           {onAction && device.status === 'decommissioned' && (
             <div className="rounded-md border border-border p-4 space-y-3">
-              <h3 className="text-sm font-semibold">Decommissioned Device</h3>
+              <h3 className="text-sm font-semibold">{t('devices.settingsModal.decommissionedTitle')}</h3>
               <p className="text-xs text-muted-foreground">
-                This device is decommissioned. You can restore it or permanently delete it.
+                {t('devices.settingsModal.decommissionedDescription')}
               </p>
               <div className="flex gap-2">
                 <button
@@ -219,7 +224,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
                   disabled={saving}
                   className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Restore Device
+                  {t('devices.settingsModal.restoreDevice')}
                 </button>
                 <button
                   type="button"
@@ -231,16 +236,16 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
                   className="inline-flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Permanently Delete
+                  {t('devices.settingsModal.permanentlyDelete')}
                 </button>
               </div>
             </div>
           )}
           {onAction && device.status !== 'decommissioned' && (
             <div className="rounded-md border border-destructive/40 p-4">
-              <h3 className="text-sm font-semibold text-destructive">Danger Zone</h3>
+              <h3 className="text-sm font-semibold text-destructive">{t('devices.settingsModal.dangerZone')}</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Decommissioning will remove this device from your active fleet.
+                {t('devices.settingsModal.dangerDescription')}
               </p>
               <button
                 type="button"
@@ -252,7 +257,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
                 className="mt-3 inline-flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" />
-                Decommission Device
+                {t('devices.settingsModal.decommissionDevice')}
               </button>
             </div>
           )}
@@ -265,7 +270,7 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
             disabled={saving}
             className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -276,10 +281,10 @@ export default function DeviceSettingsModal({ device, isOpen, onClose, onSaved, 
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                {t('common.saving')}
               </>
             ) : (
-              'Save Changes'
+              t('devices.settingsModal.saveChanges')
             )}
           </button>
         </div>
