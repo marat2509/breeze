@@ -233,6 +233,13 @@ export const resources = {
         unknownBulkAction: 'Unknown bulk action: {{action}}',
         bulkActionFailed: 'Failed bulk {{action}}',
       },
+      card: {
+        actionsFor: 'Actions for {{hostname}}',
+        loadingTrend: 'Loading trend...',
+        trendUnavailable: 'Trend unavailable',
+        noTrendData: 'No trend data',
+        lastSeen: 'Last seen {{value}}',
+      },
       addModal: {
         title: 'Add New Device',
         downloadInstaller: 'Download Installer',
@@ -826,6 +833,13 @@ export const resources = {
         bulkWakePartial: 'Wake отправлен на {{succeeded}} из {{total}} устройств. Не удалось разбудить {{failed}}: {{summary}}.',
         unknownBulkAction: 'Неизвестное массовое действие: {{action}}',
         bulkActionFailed: 'Не удалось выполнить массовое действие {{action}}',
+      },
+      card: {
+        actionsFor: 'Действия для {{hostname}}',
+        loadingTrend: 'Загрузка тренда...',
+        trendUnavailable: 'Тренд недоступен',
+        noTrendData: 'Нет данных тренда',
+        lastSeen: 'Последняя активность {{value}}',
       },
       addModal: {
         title: 'Добавить устройство',

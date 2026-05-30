@@ -4,6 +4,7 @@ import type { Device, DeviceStatus, OSType } from './DeviceList';
 import { fetchWithAuth } from '../../stores/auth';
 import { formatLastSeen } from '@/lib/formatTime';
 import { asRecord, toPercentNullable } from '@/lib/deviceUtils';
+import { useI18n } from '@/i18n/react';
 
 type DeviceCardProps = {
   device: Device;
@@ -102,6 +103,7 @@ function MiniSparkline({ data, testId }: { data: number[]; testId: string }) {
 }
 
 export default function DeviceCard({ device, timezone, onClick, onAction }: DeviceCardProps) {
+  const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const [metricHistory, setMetricHistory] = useState<MetricHistoryPoint[]>([]);
@@ -152,6 +154,17 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
   const ramHistory = historyState === 'ready'
     ? metricHistory.map(point => point.ram)
     : [];
+  const statusLabel = t(
+    `devices.status.${device.status}`,
+    undefined,
+    device.status.charAt(0).toUpperCase() + device.status.slice(1),
+  );
+  const trendStateLabel =
+    historyState === 'loading'
+      ? t('devices.card.loadingTrend')
+      : historyState === 'error'
+        ? t('devices.card.trendUnavailable')
+        : t('devices.card.noTrendData');
 
   return (
     <div
@@ -167,7 +180,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
             <div className="flex items-center gap-2">
               <h3 className="font-medium">{device.hostname}</h3>
               <span className={`h-2 w-2 rounded-full ${statusColors[device.status]}`} aria-hidden="true" />
-              <span className="sr-only">{device.status.charAt(0).toUpperCase() + device.status.slice(1)}</span>
+              <span className="sr-only">{statusLabel}</span>
             </div>
             <p className="text-xs text-muted-foreground">{device.osVersion}</p>
           </div>
@@ -179,7 +192,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
               e.stopPropagation();
               setMenuOpen(!menuOpen);
             }}
-            aria-label={`Actions for ${device.hostname}`}
+            aria-label={t('devices.card.actionsFor', { hostname: device.hostname })}
             className="flex h-8 w-8 items-center justify-center rounded-md opacity-40 transition hover:bg-muted hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <MoreVertical className="h-4 w-4" />
@@ -196,7 +209,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
               >
                 <Terminal className="h-4 w-4" />
-                Remote Terminal
+                {t('devices.list.remoteTerminal')}
               </button>
               <button
                 type="button"
@@ -208,7 +221,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
               >
                 <FileCode className="h-4 w-4" />
-                Run Script
+                {t('devices.list.runScript')}
               </button>
               <button
                 type="button"
@@ -220,7 +233,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
               >
                 <RotateCcw className="h-4 w-4" />
-                Reboot
+                {t('devices.list.reboot')}
               </button>
               <button
                 type="button"
@@ -232,7 +245,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
               >
                 <Settings className="h-4 w-4" />
-                Settings
+                {t('devices.list.settings')}
               </button>
               <hr className="my-1" />
               {device.status === 'decommissioned' ? (
@@ -246,7 +259,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-success hover:bg-success/10"
                 >
                   <RotateCcw className="h-4 w-4" />
-                  Restore
+                  {t('devices.list.restore')}
                 </button>
               ) : (
                 <button
@@ -259,7 +272,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Decommission
+                  {t('devices.list.decommission')}
                 </button>
               )}
             </div>
@@ -282,7 +295,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
             </div>
           ) : (
             <div className="flex h-8 items-center text-[11px] text-muted-foreground">
-              {historyState === 'loading' ? 'Loading trend...' : historyState === 'error' ? 'Trend unavailable' : 'No trend data'}
+              {trendStateLabel}
             </div>
           )}
         </div>
@@ -300,7 +313,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
             </div>
           ) : (
             <div className="flex h-8 items-center text-[11px] text-muted-foreground">
-              {historyState === 'loading' ? 'Loading trend...' : historyState === 'error' ? 'Trend unavailable' : 'No trend data'}
+              {trendStateLabel}
             </div>
           )}
         </div>
@@ -308,7 +321,7 @@ export default function DeviceCard({ device, timezone, onClick, onAction }: Devi
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
         <span>{device.siteName}</span>
-        <span>Last seen {formatLastSeen(device.lastSeen, effectiveTimezone)}</span>
+        <span>{t('devices.card.lastSeen', { value: formatLastSeen(device.lastSeen, effectiveTimezone) })}</span>
       </div>
     </div>
   );
