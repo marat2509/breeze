@@ -6,6 +6,8 @@ import { FilterBuilder, DEFAULT_FILTER_FIELDS } from '../filters/FilterBuilder';
 import { FilterPreview } from '../filters/FilterPreview';
 import { useFilterPreview } from '../../hooks/useFilterPreview';
 import { legacyRulesToFilterConditions } from './filterMigration';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 type OSType = 'windows' | 'macos' | 'linux';
 
@@ -75,6 +77,12 @@ type DragPayload = {
   fromGroupId: string;
 };
 
+type TFunction = (
+  key: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+  fallback?: string,
+) => string;
+
 const osLabels: Record<OSType, string> = {
   windows: 'Windows',
   macos: 'macOS',
@@ -125,35 +133,24 @@ const normalizeGroup = (group: DeviceGroup): DeviceGroup => {
 
 const buildRuleLabel = (
   rule: DeviceGroupRule,
-  siteNameById: Map<string, string>
+  siteNameById: Map<string, string>,
+  t: TFunction,
 ): string => {
-  const fieldLabel =
-    rule.field === 'os'
-      ? 'OS'
-      : rule.field === 'site'
-        ? 'Site'
-        : rule.field === 'tag'
-          ? 'Tag'
-          : 'Hostname';
-  const operatorLabel =
-    rule.operator === 'is'
-      ? 'is'
-      : rule.operator === 'is_not'
-        ? 'is not'
-        : rule.operator === 'contains'
-          ? 'contains'
-          : rule.operator === 'not_contains'
-            ? 'does not contain'
-            : rule.operator === 'matches'
-              ? 'matches'
-              : 'does not match';
+  const fieldLabel = t(`deviceGroups.ruleFields.${rule.field}`);
+  const operatorLabel = t(`deviceGroups.ruleOperators.${rule.operator}`);
 
   const value =
     rule.field === 'site'
       ? siteNameById.get(rule.value) ?? rule.value
+      : rule.field === 'os'
+        ? t(`devices.osNames.${rule.value}`, undefined, rule.value)
       : rule.value;
 
-  return `${fieldLabel} ${operatorLabel} ${value || '...'}`;
+  return t('deviceGroups.ruleLabel', {
+    field: fieldLabel,
+    operator: operatorLabel,
+    value: value || t('deviceGroups.emptyRuleValue'),
+  });
 };
 
 const parseDragPayload = (event: DragEvent): DragPayload | null => {
@@ -171,6 +168,7 @@ const parseDragPayload = (event: DragEvent): DragPayload | null => {
 };
 
 export default function DeviceGroupsPage() {
+  const { locale, t } = useI18n();
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -250,23 +248,40 @@ export default function DeviceGroupsPage() {
     });
   }, [assignmentQuery, devices]);
 
+  const pluralSuffix = (value: number): 'One' | 'Few' | 'Many' => {
+    const mod10 = Math.abs(value) % 10;
+    const mod100 = Math.abs(value) % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'One';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'Few';
+    return 'Many';
+  };
+
+  const countText = (baseKey: string, count: number) =>
+    t(`${baseKey}${pluralSuffix(count)}`, { count: formatNumber(count, locale) });
+
+  const deviceCountText = (count: number) => countText('deviceGroups.counts.devices', count);
+  const selectedGroupCountText = (count: number) => countText('deviceGroups.counts.groupsSelected', count);
+  const selectedDeviceCountText = (count: number) => countText('deviceGroups.counts.devicesSelected', count);
+  const osLabel = (os: OSType) => t(`devices.osNames.${os}`, undefined, osLabels[os]);
+  const groupTypeLabel = (type: GroupType) => t(`devices.groupTypes.${type}`, undefined, type);
+
   const fetchGroups = useCallback(async () => {
     try {
       setLoading(true);
       setError(undefined);
       const response = await fetchWithAuth('/device-groups');
       if (!response.ok) {
-        throw new Error('Failed to fetch device groups');
+        throw new Error(t('deviceGroups.errors.fetchGroups'));
       }
       const data = await response.json();
       const nextGroups = (data.groups ?? data ?? []).map(normalizeGroup);
       setGroups(nextGroups);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch device groups');
+      setError(err instanceof Error ? err.message : t('deviceGroups.errors.fetchGroups'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -490,7 +505,7 @@ export default function DeviceGroupsPage() {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to update group');
+      throw new Error(t('deviceGroups.errors.updateGroup'));
     }
   };
 
@@ -498,7 +513,7 @@ export default function DeviceGroupsPage() {
     event.preventDefault();
     const trimmedName = groupForm.name.trim();
     if (!trimmedName) {
-      setFormError('Group name is required.');
+      setFormError(t('deviceGroups.errors.nameRequired'));
       return;
     }
     if (groupForm.type === 'dynamic') {
@@ -507,7 +522,7 @@ export default function DeviceGroupsPage() {
         return c.value !== '' && c.value !== null && c.value !== undefined;
       });
       if (!hasValidCondition) {
-        setFormError('Add at least one filter condition to a dynamic group.');
+        setFormError(t('deviceGroups.errors.dynamicConditionRequired'));
         return;
       }
     }
@@ -537,13 +552,13 @@ export default function DeviceGroupsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save device group');
+        throw new Error(t('deviceGroups.errors.saveGroup'));
       }
 
       await fetchGroups();
       handleCloseModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to save device group');
+      setFormError(err instanceof Error ? err.message : t('deviceGroups.errors.saveGroup'));
     } finally {
       setSubmitting(false);
     }
@@ -562,13 +577,13 @@ export default function DeviceGroupsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete group');
+        throw new Error(t('deviceGroups.errors.deleteGroup'));
       }
 
       await fetchGroups();
       handleCloseModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to delete group');
+      setFormError(err instanceof Error ? err.message : t('deviceGroups.errors.deleteGroup'));
     } finally {
       setSubmitting(false);
     }
@@ -588,14 +603,14 @@ export default function DeviceGroupsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to run script on groups');
+        throw new Error(t('deviceGroups.errors.runScript'));
       }
 
       await fetchGroups();
       setSelectedGroupIds(new Set());
       handleCloseModal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run script on groups');
+      setError(err instanceof Error ? err.message : t('deviceGroups.errors.runScript'));
     } finally {
       setSubmitting(false);
     }
@@ -615,14 +630,14 @@ export default function DeviceGroupsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to apply policy to groups');
+        throw new Error(t('deviceGroups.errors.applyPolicy'));
       }
 
       await fetchGroups();
       setSelectedGroupIds(new Set());
       handleCloseModal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to apply policy to groups');
+      setError(err instanceof Error ? err.message : t('deviceGroups.errors.applyPolicy'));
     } finally {
       setSubmitting(false);
     }
@@ -666,7 +681,7 @@ export default function DeviceGroupsPage() {
         updateGroup(targetGroup, { deviceIds: nextTargetIds })
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to move device');
+      setError(err instanceof Error ? err.message : t('deviceGroups.errors.moveDevice'));
       await fetchGroups();
     }
   };
@@ -698,7 +713,7 @@ export default function DeviceGroupsPage() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading device groups...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('deviceGroups.loading')}</p>
         </div>
       </div>
     );
@@ -713,7 +728,7 @@ export default function DeviceGroupsPage() {
           onClick={fetchGroups}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Try again
+          {t('devices.page.tryAgain')}
         </button>
       </div>
     );
@@ -723,9 +738,9 @@ export default function DeviceGroupsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Device Groups</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('deviceGroups.title')}</h1>
           <p className="text-muted-foreground">
-            Organize devices into static and dynamic groups for targeted actions.
+            {t('deviceGroups.description')}
           </p>
         </div>
         <button
@@ -734,7 +749,7 @@ export default function DeviceGroupsPage() {
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >
           <Plus className="h-4 w-4" />
-          Create Group
+          {t('deviceGroups.createGroup')}
         </button>
       </div>
 
@@ -747,7 +762,7 @@ export default function DeviceGroupsPage() {
       {selectedGroupIds.size > 0 && (
         <div className="flex flex-col gap-3 rounded-md border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-medium">
-            {selectedGroupIds.size} group{selectedGroupIds.size === 1 ? '' : 's'} selected
+            {selectedGroupCountText(selectedGroupIds.size)}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -756,7 +771,7 @@ export default function DeviceGroupsPage() {
               className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
             >
               <Play className="h-4 w-4" />
-              Run script
+              {t('deviceGroups.runScript')}
             </button>
             <button
               type="button"
@@ -764,14 +779,14 @@ export default function DeviceGroupsPage() {
               className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
             >
               <Shield className="h-4 w-4" />
-              Apply policy
+              {t('deviceGroups.applyPolicy')}
             </button>
             <button
               type="button"
               onClick={() => setSelectedGroupIds(new Set())}
               className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium text-muted-foreground transition hover:bg-muted"
             >
-              Clear selection
+              {t('deviceGroups.clearSelection')}
             </button>
           </div>
         </div>
@@ -780,14 +795,14 @@ export default function DeviceGroupsPage() {
       {groups.length === 0 ? (
         <div className="rounded-lg border bg-card p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            No device groups yet. Create one to start organizing devices.
+            {t('deviceGroups.empty')}
           </p>
           <button
             type="button"
             onClick={handleOpenCreate}
             className="mt-4 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
-            Create your first group
+            {t('deviceGroups.createFirst')}
           </button>
         </div>
       ) : (
@@ -799,7 +814,7 @@ export default function DeviceGroupsPage() {
               onChange={event => handleSelectAll(event.target.checked)}
               className="h-4 w-4 rounded border-muted text-primary focus:ring-primary"
             />
-            Select all groups
+            {t('deviceGroups.selectAll')}
           </div>
           <div className="space-y-4">
             {groups.map(group => {
@@ -825,18 +840,20 @@ export default function DeviceGroupsPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-lg font-semibold">{group.name}</h2>
                           <span className="rounded-full border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                            {group.type === 'dynamic' ? 'Dynamic' : 'Static'}
+                            {groupTypeLabel(group.type)}
                           </span>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {group.description?.trim().length ? group.description : 'No description provided.'}
+                          {group.description?.trim().length ? group.description : t('deviceGroups.noDescription')}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           <span className="rounded-full border bg-muted px-2 py-0.5">
-                            {deviceCount} device{deviceCount === 1 ? '' : 's'}
+                            {deviceCountText(deviceCount)}
                           </span>
                           <span className="rounded-full border bg-muted px-2 py-0.5">
-                            Policy: {group.policyName || 'Not assigned'}
+                            {t('deviceGroups.policyChip', {
+                              policy: group.policyName || t('deviceGroups.notAssigned'),
+                            })}
                           </span>
                         </div>
                       </div>
@@ -848,7 +865,7 @@ export default function DeviceGroupsPage() {
                         className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
                       >
                         <Pencil className="h-4 w-4" />
-                        Edit
+                        {t('deviceGroups.edit')}
                       </button>
                       <button
                         type="button"
@@ -856,7 +873,7 @@ export default function DeviceGroupsPage() {
                         className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/40 px-3 text-sm font-medium text-destructive transition hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
-                        Delete
+                        {t('deviceGroups.delete')}
                       </button>
                     </div>
                   </div>
@@ -864,9 +881,9 @@ export default function DeviceGroupsPage() {
                   {group.type === 'dynamic' ? (
                     <div className="mt-4 rounded-md border bg-muted/20 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">Auto-membership rules</p>
+                        <p className="text-sm font-medium">{t('deviceGroups.autoRules')}</p>
                         <span className="text-xs text-muted-foreground">
-                          Matches {deviceCount} device{deviceCount === 1 ? '' : 's'}
+                          {countText('deviceGroups.counts.matchesDevices', deviceCount)}
                         </span>
                       </div>
                       {group.rules && group.rules.length > 0 ? (
@@ -876,12 +893,12 @@ export default function DeviceGroupsPage() {
                               key={rule.id}
                               className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground"
                             >
-                              {buildRuleLabel(rule, siteNameById)}
+                              {buildRuleLabel(rule, siteNameById, t)}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-2 text-xs text-muted-foreground">No rules defined.</p>
+                        <p className="mt-2 text-xs text-muted-foreground">{t('deviceGroups.noRules')}</p>
                       )}
                     </div>
                   ) : (
@@ -902,13 +919,13 @@ export default function DeviceGroupsPage() {
                       }}
                     >
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Devices</span>
-                        <span>Drag devices between groups</span>
+                        <span>{t('deviceGroups.devices')}</span>
+                        <span>{t('deviceGroups.dragHint')}</span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {groupDevices.length === 0 ? (
                           <span className="text-xs text-muted-foreground">
-                            Drop devices here or assign them in the group editor.
+                            {t('deviceGroups.dropHint')}
                           </span>
                         ) : (
                           groupDevices.map(device => (
@@ -927,7 +944,7 @@ export default function DeviceGroupsPage() {
                               className="flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground transition hover:border-primary/40 cursor-grab"
                             >
                               <span className="font-medium text-foreground">{device.hostname}</span>
-                              <span>{osLabels[device.os]}</span>
+                              <span>{osLabel(device.os)}</span>
                             </div>
                           ))
                         )}
@@ -947,17 +964,18 @@ export default function DeviceGroupsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">
-                  {modalMode === 'create' ? 'Create Device Group' : 'Edit Device Group'}
+                  {modalMode === 'create' ? t('deviceGroups.createModalTitle') : t('deviceGroups.editModalTitle')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {modalMode === 'create'
-                    ? 'Define membership rules or manually assign devices.'
-                    : 'Update the group name, rules, and assignments.'}
+                    ? t('deviceGroups.createModalDescription')
+                    : t('deviceGroups.editModalDescription')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleCloseModal}
+                title={t('common.cancel')}
                 className="rounded-md p-2 text-muted-foreground transition hover:bg-muted"
               >
                 <X className="h-4 w-4" />
@@ -967,23 +985,23 @@ export default function DeviceGroupsPage() {
             <form className="mt-6 space-y-6" onSubmit={handleSubmitGroup}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium">Group Name</label>
+                  <label className="text-sm font-medium">{t('deviceGroups.groupName')}</label>
                   <input
                     type="text"
                     value={groupForm.name}
                     onChange={event => setGroupForm(prev => ({ ...prev, name: event.target.value }))}
                     className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="e.g. Production Linux"
+                    placeholder={t('deviceGroups.groupNamePlaceholder')}
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Policy Assignment</label>
+                  <label className="text-sm font-medium">{t('deviceGroups.policyAssignment')}</label>
                   <select
                     value={groupForm.policyId}
                     onChange={event => setGroupForm(prev => ({ ...prev, policyId: event.target.value }))}
                     className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">No policy assigned</option>
+                    <option value="">{t('deviceGroups.noPolicyAssigned')}</option>
                     {policies.map(policy => (
                       <option key={policy.id} value={policy.id}>
                         {policy.name}
@@ -994,17 +1012,17 @@ export default function DeviceGroupsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Description</label>
+                <label className="text-sm font-medium">{t('deviceGroups.formDescription')}</label>
                 <textarea
                   value={groupForm.description}
                   onChange={event => setGroupForm(prev => ({ ...prev, description: event.target.value }))}
                   className="mt-2 min-h-[96px] w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Optional description to help your team."
+                  placeholder={t('deviceGroups.descriptionPlaceholder')}
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium">Group Type</label>
+                <label className="text-sm font-medium">{t('deviceGroups.groupType')}</label>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -1020,7 +1038,7 @@ export default function DeviceGroupsPage() {
                         : 'hover:bg-muted'
                     }`}
                   >
-                    Static
+                    {groupTypeLabel('static')}
                   </button>
                   <button
                     type="button"
@@ -1040,7 +1058,7 @@ export default function DeviceGroupsPage() {
                         : 'hover:bg-muted'
                     }`}
                   >
-                    Dynamic
+                    {groupTypeLabel('dynamic')}
                   </button>
                 </div>
               </div>
@@ -1048,9 +1066,9 @@ export default function DeviceGroupsPage() {
               {groupForm.type === 'dynamic' ? (
                 <div className="rounded-md border bg-muted/20 p-4 space-y-4">
                   <div>
-                    <h3 className="text-sm font-semibold">Auto-membership Filter</h3>
+                    <h3 className="text-sm font-semibold">{t('deviceGroups.autoFilter')}</h3>
                     <p className="text-xs text-muted-foreground">
-                      Devices matching these conditions will automatically join the group.
+                      {t('deviceGroups.autoFilterDescription')}
                     </p>
                   </div>
                   <FilterBuilder
@@ -1070,13 +1088,13 @@ export default function DeviceGroupsPage() {
                 <div className="rounded-md border bg-muted/20 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold">Manual Device Assignment</h3>
+                      <h3 className="text-sm font-semibold">{t('deviceGroups.manualAssignment')}</h3>
                       <p className="text-xs text-muted-foreground">
-                        Select devices that should belong to this group.
+                        {t('deviceGroups.manualAssignmentDescription')}
                       </p>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {groupForm.deviceIds.length} selected
+                      {selectedDeviceCountText(groupForm.deviceIds.length)}
                     </span>
                   </div>
                   <div className="mt-3">
@@ -1084,13 +1102,13 @@ export default function DeviceGroupsPage() {
                       type="search"
                       value={assignmentQuery}
                       onChange={event => setAssignmentQuery(event.target.value)}
-                      placeholder="Search devices by hostname or tag"
+                      placeholder={t('deviceGroups.searchDevices')}
                       className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
                   <div className="mt-3 max-h-56 overflow-y-auto space-y-2">
                     {filteredAssignmentDevices.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No devices match your search.</p>
+                      <p className="text-xs text-muted-foreground">{t('deviceGroups.noDevicesMatch')}</p>
                     ) : (
                       filteredAssignmentDevices.map(device => {
                         const checked = groupForm.deviceIds.includes(device.id);
@@ -1119,7 +1137,7 @@ export default function DeviceGroupsPage() {
                             <div className="flex-1">
                               <p className="text-sm font-medium text-foreground">{device.hostname}</p>
                               <p className="text-xs text-muted-foreground">
-                                {osLabels[device.os]} · {device.siteName}
+                                {osLabel(device.os)} · {device.siteName}
                               </p>
                             </div>
                           </label>
@@ -1142,7 +1160,7 @@ export default function DeviceGroupsPage() {
                   onClick={handleCloseModal}
                   className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1151,11 +1169,11 @@ export default function DeviceGroupsPage() {
                 >
                   {submitting
                     ? modalMode === 'create'
-                      ? 'Creating...'
-                      : 'Saving...'
+                      ? t('deviceGroups.creating')
+                      : t('common.saving')
                     : modalMode === 'create'
-                      ? 'Create group'
-                      : 'Save changes'}
+                      ? t('deviceGroups.createGroupLower')
+                      : t('common.saveChanges')}
                 </button>
               </div>
             </form>
@@ -1166,20 +1184,21 @@ export default function DeviceGroupsPage() {
       {modalMode === 'delete' && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Delete Group</h2>
+            <h2 className="text-lg font-semibold">{t('deviceGroups.deleteModalTitle')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete <span className="font-medium">{selectedGroup.name}</span>?
-              This will remove {getGroupDeviceCount(selectedGroup)} device
-              {getGroupDeviceCount(selectedGroup) === 1 ? '' : 's'} from the group.
+              {t('deviceGroups.deleteConfirmPrefix')}{' '}
+              <span className="font-medium">{selectedGroup.name}</span>?
+              {' '}
+              {countText('deviceGroups.counts.deleteRemovesDevices', getGroupDeviceCount(selectedGroup))}
             </p>
             <div className="mt-4">
-              <label className="text-sm font-medium">Reassign devices (optional)</label>
+              <label className="text-sm font-medium">{t('deviceGroups.reassignDevices')}</label>
               <select
                 value={deleteReassignGroupId}
                 onChange={event => setDeleteReassignGroupId(event.target.value)}
                 className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Leave unassigned</option>
+                <option value="">{t('deviceGroups.leaveUnassigned')}</option>
                 {groups
                   .filter(group => group.id !== selectedGroup.id && group.type === 'static')
                   .map(group => (
@@ -1199,16 +1218,16 @@ export default function DeviceGroupsPage() {
                 type="button"
                 onClick={handleCloseModal}
                 className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-              >
-                Cancel
-              </button>
+                >
+                  {t('common.cancel')}
+                </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={submitting}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Deleting...' : 'Delete group'}
+                {submitting ? t('deviceGroups.deleting') : t('deviceGroups.deleteGroupLower')}
               </button>
             </div>
           </div>
@@ -1218,19 +1237,18 @@ export default function DeviceGroupsPage() {
       {modalMode === 'bulk-script' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Run Script on Groups</h2>
+            <h2 className="text-lg font-semibold">{t('deviceGroups.runScriptModalTitle')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Choose a script to run on {selectedGroupIds.size} selected group
-              {selectedGroupIds.size === 1 ? '' : 's'}.
+              {countText('deviceGroups.counts.runScriptSelection', selectedGroupIds.size)}
             </p>
             <div className="mt-4">
-              <label className="text-sm font-medium">Script</label>
+              <label className="text-sm font-medium">{t('deviceGroups.script')}</label>
               <select
                 value={bulkScriptId}
                 onChange={event => setBulkScriptId(event.target.value)}
                 className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Select a script</option>
+                <option value="">{t('deviceGroups.selectScript')}</option>
                 {scripts.map(script => (
                   <option key={script.id} value={script.id}>
                     {script.name}
@@ -1243,16 +1261,16 @@ export default function DeviceGroupsPage() {
                 type="button"
                 onClick={handleCloseModal}
                 className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-              >
-                Cancel
-              </button>
+                >
+                  {t('common.cancel')}
+                </button>
               <button
                 type="button"
                 onClick={handleBulkScript}
                 disabled={submitting || !bulkScriptId}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Running...' : 'Run script'}
+                {submitting ? t('deviceGroups.running') : t('deviceGroups.runScript')}
               </button>
             </div>
           </div>
@@ -1262,19 +1280,18 @@ export default function DeviceGroupsPage() {
       {modalMode === 'bulk-policy' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Apply Policy to Groups</h2>
+            <h2 className="text-lg font-semibold">{t('deviceGroups.applyPolicyModalTitle')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Assign a policy to {selectedGroupIds.size} selected group
-              {selectedGroupIds.size === 1 ? '' : 's'}.
+              {countText('deviceGroups.counts.applyPolicySelection', selectedGroupIds.size)}
             </p>
             <div className="mt-4">
-              <label className="text-sm font-medium">Policy</label>
+              <label className="text-sm font-medium">{t('deviceGroups.policy')}</label>
               <select
                 value={bulkPolicyId}
                 onChange={event => setBulkPolicyId(event.target.value)}
                 className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Select a policy</option>
+                <option value="">{t('deviceGroups.selectPolicy')}</option>
                 {policies.map(policy => (
                   <option key={policy.id} value={policy.id}>
                     {policy.name}
@@ -1287,16 +1304,16 @@ export default function DeviceGroupsPage() {
                 type="button"
                 onClick={handleCloseModal}
                 className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-              >
-                Cancel
-              </button>
+                >
+                  {t('common.cancel')}
+                </button>
               <button
                 type="button"
                 onClick={handleBulkPolicy}
                 disabled={submitting || !bulkPolicyId}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Applying...' : 'Apply policy'}
+                {submitting ? t('deviceGroups.applying') : t('deviceGroups.applyPolicy')}
               </button>
             </div>
           </div>
