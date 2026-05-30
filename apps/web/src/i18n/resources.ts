@@ -883,6 +883,49 @@ export const resources = {
         provider: 'Vendor API',
       },
     },
+    devicePeripherals: {
+      summary: {
+        events24h: 'Events (24h)',
+        blocked24h: 'Blocked (24h)',
+        connected24h: 'Connected (24h)',
+        activePolicies: 'Active Policies',
+      },
+      recentEvents: 'Recent Events',
+      emptyEvents: 'No peripheral events recorded for this device.',
+      emptyPolicies: 'No active peripheral policies.',
+      table: {
+        occurredAt: 'Occurred At',
+        event: 'Event',
+        type: 'Type',
+        vendor: 'Vendor',
+        product: 'Product',
+        serial: 'Serial',
+      },
+      policyTable: {
+        name: 'Name',
+        deviceClass: 'Device Class',
+        action: 'Action',
+        target: 'Target',
+      },
+      events: {
+        connected: 'connected',
+        disconnected: 'disconnected',
+        blocked: 'blocked',
+        mounted_read_only: 'mounted read only',
+        policy_override: 'policy override',
+      },
+      actions: {
+        allow: 'allow',
+        block: 'block',
+        read_only: 'read only',
+        alert: 'alert',
+      },
+      errors: {
+        events: 'Failed to fetch events',
+        policies: 'Failed to fetch policies',
+        generic: 'An error occurred',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -2233,6 +2276,49 @@ export const resources = {
       dataSources: {
         agentPlist: 'Агент (macOS plist)',
         provider: 'API производителя',
+      },
+    },
+    devicePeripherals: {
+      summary: {
+        events24h: 'События (24ч)',
+        blocked24h: 'Заблокировано (24ч)',
+        connected24h: 'Подключено (24ч)',
+        activePolicies: 'Активные политики',
+      },
+      recentEvents: 'Последние события',
+      emptyEvents: 'События периферии для этого устройства не записаны.',
+      emptyPolicies: 'Нет активных политик периферии.',
+      table: {
+        occurredAt: 'Время события',
+        event: 'Событие',
+        type: 'Тип',
+        vendor: 'Вендор',
+        product: 'Продукт',
+        serial: 'Серийный номер',
+      },
+      policyTable: {
+        name: 'Название',
+        deviceClass: 'Класс устройства',
+        action: 'Действие',
+        target: 'Цель',
+      },
+      events: {
+        connected: 'подключено',
+        disconnected: 'отключено',
+        blocked: 'заблокировано',
+        mounted_read_only: 'смонтировано только для чтения',
+        policy_override: 'переопределение политики',
+      },
+      actions: {
+        allow: 'разрешить',
+        block: 'блокировать',
+        read_only: 'только чтение',
+        alert: 'оповестить',
+      },
+      errors: {
+        events: 'Не удалось загрузить события периферии',
+        policies: 'Не удалось загрузить политики периферии',
+        generic: 'Произошла ошибка',
       },
     },
     scripts: {
