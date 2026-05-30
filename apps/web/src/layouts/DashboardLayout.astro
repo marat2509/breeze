@@ -10,6 +10,7 @@ import HelpPanel from '../components/help/HelpPanel';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
 import ToastContainer from '../components/shared/Toast';
 import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
+import { translatePageTitle } from '../i18n/pageTitles';
 
 interface Props {
   title: string;
@@ -18,6 +19,7 @@ interface Props {
 
 const { title, locale: propLocale } = Astro.props;
 const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
+const localizedTitle = translatePageTitle(locale, title);
 const currentPath = Astro.url.pathname;
 
 // Domain-specific accent color for wayfinding — thin 2px bar at top of content area
@@ -35,7 +37,7 @@ const getAccentClass = (path: string): string => {
 const accentClass = getAccentClass(currentPath);
 ---
 
-<Layout title={title} locale={locale}>
+<Layout title={localizedTitle} locale={locale}>
   <AuthOverlay client:load transition:persist />
   <AccountInactiveGuard client:load transition:persist />
   <AdminSessionManager client:load transition:persist />
