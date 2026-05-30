@@ -90,6 +90,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/DeviceInfoTab.tsx',
   'src/components/devices/DeviceSettingsModal.tsx',
   'src/components/devices/DeviceList.tsx',
+  'src/components/devices/DeviceLogsTab.tsx',
   'src/components/devices/DeviceManagementTab.tsx',
   'src/components/devices/DeviceNetworkConnections.tsx',
   'src/components/devices/DevicePeripheralsTab.tsx',

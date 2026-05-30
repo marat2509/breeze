@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -10,6 +10,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
+import { formatNumber } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import type { TranslationParams } from '@/i18n/resources';
 
 type LogLevel = 'info' | 'warning' | 'error' | 'critical';
 type LogCategory = 'security' | 'hardware' | 'application' | 'system';
@@ -34,6 +38,8 @@ type DeviceLogsTabProps = {
   timezone?: string;
   osType?: OSType;
 };
+
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
 
 const levelConfig: Record<LogLevel, { label: string; icon: typeof Info; badge: string }> = {
   critical: {
@@ -65,60 +71,69 @@ const categoryConfig: Record<LogCategory, { label: string; color: string }> = {
   system: { label: 'System', color: 'bg-gray-500/20 text-gray-700 border-gray-500/40' },
 };
 
-function formatDateTime(value: string, timezone?: string) {
+function formatDateTime(value: string, timezone: string | undefined, locale: Locale) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], timezone ? { timeZone: timezone } : undefined);
+  return date.toLocaleString(locale, timezone ? { timeZone: timezone } : undefined);
 }
 
-const osSourcePresets: Record<OSType, { label: string; value: string }[]> = {
+const osSourcePresets: Record<OSType, { labelKey: string; value: string }[]> = {
   windows: [
-    { label: 'Security', value: 'Microsoft-Windows-Security-Auditing' },
-    { label: 'System', value: 'Microsoft-Windows-Kernel-Power' },
-    { label: 'Application', value: 'Application Error' },
-    { label: 'Disk', value: 'disk' },
-    { label: 'NTFS', value: 'Ntfs' },
+    { labelKey: 'security', value: 'Microsoft-Windows-Security-Auditing' },
+    { labelKey: 'system', value: 'Microsoft-Windows-Kernel-Power' },
+    { labelKey: 'application', value: 'Application Error' },
+    { labelKey: 'disk', value: 'disk' },
+    { labelKey: 'ntfs', value: 'Ntfs' },
   ],
   macos: [
-    { label: 'Unified Log', value: 'com.apple' },
-    { label: 'Security', value: 'com.apple.opendirectoryd' },
-    { label: 'IOKit', value: 'com.apple.iokit' },
-    { label: 'Crash Reports', value: 'crash:' },
-    { label: 'Power (pmset)', value: 'pmset' },
+    { labelKey: 'unifiedLog', value: 'com.apple' },
+    { labelKey: 'security', value: 'com.apple.opendirectoryd' },
+    { labelKey: 'iokit', value: 'com.apple.iokit' },
+    { labelKey: 'crashReports', value: 'crash:' },
+    { labelKey: 'powerPmset', value: 'pmset' },
   ],
   linux: [
-    { label: 'sshd', value: 'sshd' },
-    { label: 'Kernel', value: 'kernel' },
-    { label: 'systemd', value: 'systemd' },
-    { label: 'PAM', value: 'pam' },
-    { label: 'journald', value: 'systemd-journald' },
+    { labelKey: 'sshd', value: 'sshd' },
+    { labelKey: 'kernel', value: 'kernel' },
+    { labelKey: 'systemd', value: 'systemd' },
+    { labelKey: 'pam', value: 'pam' },
+    { labelKey: 'journald', value: 'systemd-journald' },
   ],
-};
-
-const osCategoryHints: Record<OSType, Record<string, string>> = {
-  windows: {
-    security: 'Windows Security Event Log (logon failures, privilege changes)',
-    hardware: 'System log (disk, driver, WHEA errors)',
-    application: 'Application log (crashes, .NET exceptions, WER)',
-    system: 'Power events (shutdown, restart, boot)',
-  },
-  macos: {
-    security: 'Unified log (opendirectoryd, TCC, auth events)',
-    hardware: 'IOKit errors, thermal events, kernel panics',
-    application: 'Crash reports (.ips/.crash files)',
-    system: 'Power events (sleep, wake, shutdown via pmset)',
-  },
-  linux: {
-    security: 'Auth events (sshd, PAM, sudo)',
-    hardware: 'Kernel messages (disk I/O, OOM, hardware errors)',
-    application: 'Service failures and coredumps',
-    system: 'Boot, shutdown, and systemd unit events',
-  },
 };
 
 const PAGE_SIZE = 50;
 
+function pluralSuffix(value: number, locale: Locale): 'One' | 'Few' | 'Many' {
+  if (locale !== 'ru') return value === 1 ? 'One' : 'Many';
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'One';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'Few';
+  return 'Many';
+}
+
+function levelLabel(level: string, t: Translate): string {
+  return t(`deviceLogs.levels.${level}`, undefined, levelConfig[level as LogLevel]?.label ?? level);
+}
+
+function categoryLabel(category: string, t: Translate): string {
+  return t(`deviceLogs.categories.${category}`, undefined, categoryConfig[category as LogCategory]?.label ?? category);
+}
+
+function sourcePlaceholder(osType: OSType | undefined, t: Translate): string {
+  if (osType === 'windows') return t('deviceLogs.placeholders.windowsSource');
+  if (osType === 'macos') return t('deviceLogs.placeholders.macosSource');
+  if (osType === 'linux') return t('deviceLogs.placeholders.linuxSource');
+  return t('deviceLogs.placeholders.source');
+}
+
+function logCountLabel(total: number, locale: Locale, t: Translate): string {
+  return t(`deviceLogs.count${pluralSuffix(total, locale)}`, { count: formatNumber(total, locale) });
+}
+
 export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogsTabProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [logs, setLogs] = useState<DeviceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -136,6 +151,10 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
   const effectiveTimezone = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     setError(undefined);
@@ -151,10 +170,9 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
 
       const response = await fetchWithAuth(`/devices/${deviceId}/eventlogs?${params}`);
       if (!response.ok) {
-        let detail = `Failed to fetch device logs (HTTP ${response.status})`;
+        let detail = tRef.current('deviceLogs.errors.fetchStatus', { status: response.status });
         try {
-          const body = await response.json();
-          if (body.error) detail = body.error;
+          await response.json();
         } catch (e) {
           if (!(e instanceof SyntaxError)) throw e;
         }
@@ -164,7 +182,7 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
       setLogs(json.data ?? []);
       setTotal(json.pagination?.total ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch device logs');
+      setError(err instanceof Error ? err.message : tRef.current('deviceLogs.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -194,7 +212,7 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
           onClick={fetchLogs}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceLogs.retry')}
         </button>
       </div>
     );
@@ -206,58 +224,58 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Filters</span>
+          <span className="text-sm font-medium">{t('deviceLogs.filters')}</span>
           {hasFilters && (
             <button
               type="button"
               onClick={clearFilters}
               className="ml-auto text-xs text-muted-foreground hover:text-foreground"
             >
-              Clear all
+              {t('deviceLogs.clearAll')}
             </button>
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Level</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('deviceLogs.level')}</label>
             <select
               value={levelFilter}
               onChange={(e) => { setLevelFilter(e.target.value as LogLevel | ''); setPage(1); }}
               className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
             >
-              <option value="">All levels</option>
+              <option value="">{t('deviceLogs.allLevels')}</option>
               {(Object.keys(levelConfig) as LogLevel[]).map((l) => (
-                <option key={l} value={l}>{levelConfig[l].label}</option>
+                <option key={l} value={l}>{levelLabel(l, t)}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Category</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('deviceLogs.category')}</label>
             <select
               value={categoryFilter}
               onChange={(e) => { setCategoryFilter(e.target.value as LogCategory | ''); setPage(1); }}
               className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
             >
-              <option value="">All categories</option>
+              <option value="">{t('deviceLogs.allCategories')}</option>
               {(Object.keys(categoryConfig) as LogCategory[]).map((c) => {
-                const hint = osType ? osCategoryHints[osType]?.[c] : undefined;
+                const hint = osType ? t(`deviceLogs.categoryHints.${osType}.${c}`) : undefined;
                 return (
                   <option key={c} value={c}>
-                    {categoryConfig[c].label}{hint ? ` — ${hint}` : ''}
+                    {categoryLabel(c, t)}{hint ? ` — ${hint}` : ''}
                   </option>
                 );
               })}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Source</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('deviceLogs.source')}</label>
             <input
               type="text"
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') setPage(1); }}
               onBlur={() => setPage(1)}
-              placeholder={osType === 'windows' ? 'e.g. Microsoft-Windows-Security-Auditing' : osType === 'macos' ? 'e.g. com.apple.opendirectoryd' : osType === 'linux' ? 'e.g. sshd' : 'e.g. source name'}
+              placeholder={sourcePlaceholder(osType, t)}
               className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
             />
             {osType && osSourcePresets[osType] && (
@@ -273,14 +291,14 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
                         : 'border-muted text-muted-foreground hover:border-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {preset.label}
+                    {t(`deviceLogs.sourcePresets.${osType}.${preset.labelKey}`)}
                   </button>
                 ))}
               </div>
             )}
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Start Date</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('deviceLogs.startDate')}</label>
             <input
               type="datetime-local"
               value={startDate}
@@ -289,7 +307,7 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">End Date</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('deviceLogs.endDate')}</label>
             <input
               type="datetime-local"
               value={endDate}
@@ -304,9 +322,9 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ScrollText className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Device Logs</h3>
+          <h3 className="text-lg font-semibold">{t('deviceLogs.title')}</h3>
           <span className="text-sm text-muted-foreground">
-            {loading ? '...' : `${total} log${total !== 1 ? 's' : ''}`}
+            {loading ? '...' : logCountLabel(total, locale, t)}
           </span>
         </div>
         {totalPages > 1 && (
@@ -339,14 +357,14 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
         <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
           <div className="text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="mt-3 text-sm text-muted-foreground">Loading device logs...</p>
+            <p className="mt-3 text-sm text-muted-foreground">{t('deviceLogs.loading')}</p>
           </div>
         </div>
       ) : logs.length === 0 ? (
         <div className="rounded-lg border bg-card py-12 text-center shadow-sm">
           <ScrollText className="mx-auto h-8 w-8 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            {hasFilters ? 'No logs match the selected filters.' : 'No device logs recorded yet.'}
+            {hasFilters ? t('deviceLogs.emptyFiltered') : t('deviceLogs.empty')}
           </p>
         </div>
       ) : (
@@ -373,16 +391,16 @@ export default function DeviceLogsTab({ deviceId, timezone, osType }: DeviceLogs
                         {log.source}
                         {log.eventId ? ` (${log.eventId})` : ''}
                         {' \u2022 '}
-                        {formatDateTime(log.timestamp, effectiveTimezone)}
+                        {formatDateTime(log.timestamp, effectiveTimezone, locale)}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cc.color}`}>
-                      {cc.label}
+                      {categoryLabel(log.category, t)}
                     </span>
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${lc.badge}`}>
-                      {lc.label}
+                      {levelLabel(log.level, t)}
                     </span>
                   </div>
                 </div>
