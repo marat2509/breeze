@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Package,
   Search,
@@ -15,6 +15,8 @@ import {
 import { fetchWithAuth } from '../../stores/auth';
 import { runAction, ActionError } from '../../lib/runAction';
 import { showToast } from '../shared/Toast';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 function isApplePublisher(publisher: string): boolean {
   const p = publisher.toLowerCase();
@@ -23,7 +25,7 @@ function isApplePublisher(publisher: string): boolean {
 
 function AppleIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 384 512" fill="currentColor" aria-label="Apple">
+    <svg className={className} viewBox="0 0 384 512" fill="currentColor" aria-hidden="true">
       <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-62.1 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
     </svg>
   );
@@ -49,19 +51,21 @@ type DeviceSoftwareInventoryProps = {
 
 type SoftwareAction = 'update' | 'uninstall';
 
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
+
 // We block update/uninstall for Apple-published macOS apps because their
 // package-manager identity (Apple-signed App Store / OS components) is not
 // expressible to `brew upgrade`/`brew uninstall`. The agent would just
 // return "no supported update command" — better to disable upfront and
 // explain why than to queue a guaranteed-to-fail command.
-function actionsAreSupported(osType: string | undefined, isApple: boolean): {
+function actionsAreSupported(osType: string | undefined, isApple: boolean, t: Translate): {
   update: { allowed: boolean; reason?: string };
   uninstall: { allowed: boolean; reason?: string };
 } {
   const os = (osType || '').toLowerCase();
   if (os === 'macos' || os === 'darwin') {
     if (isApple) {
-      const reason = 'Apple-signed apps are managed by macOS — uninstall via Settings, update via Software Update.';
+      const reason = t('deviceSoftwareInventory.unsupportedAppleReason');
       return { update: { allowed: false, reason }, uninstall: { allowed: false, reason } };
     }
     return { update: { allowed: true }, uninstall: { allowed: true } };
@@ -69,14 +73,16 @@ function actionsAreSupported(osType: string | undefined, isApple: boolean): {
   if (os === 'windows' || os === 'linux') {
     return { update: { allowed: true }, uninstall: { allowed: true } };
   }
-  const reason = `Software actions are not supported on ${osType || 'this OS'}.`;
+  const reason = t('deviceSoftwareInventory.unsupportedOsReason', {
+    os: osType || t('deviceSoftwareInventory.thisOs'),
+  });
   return { update: { allowed: false, reason }, uninstall: { allowed: false, reason } };
 }
 
-function formatDate(value?: string, timezone?: string) {
+function formatDate(value?: string, timezone?: string, locale?: string) {
   if (!value) return '-';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString([], timezone ? { timeZone: timezone } : undefined);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale, timezone ? { timeZone: timezone } : undefined);
 }
 
 type ConfirmState = {
@@ -86,6 +92,8 @@ type ConfirmState = {
 };
 
 export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: DeviceSoftwareInventoryProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [software, setSoftware] = useState<SoftwareItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -109,6 +117,10 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
   // Use provided timezone, fetched siteTimezone, or browser default
   const effectiveTimezone = timezone ?? siteTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -124,7 +136,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
     try {
       // Fetch all software (use high limit since we're doing client-side filtering)
       const response = await fetchWithAuth(`/devices/${deviceId}/software?limit=1000`);
-      if (!response.ok) throw new Error('Failed to fetch software inventory');
+      if (!response.ok) throw new Error(tRef.current('deviceSoftwareInventory.errors.fetch'));
       const json = await response.json();
       const payload = json?.data ?? json;
       setSoftware(Array.isArray(payload) ? payload : []);
@@ -133,7 +145,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
         setSiteTimezone(json.timezone ?? json.siteTimezone);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch software inventory');
+      setError(err instanceof Error ? err.message : tRef.current('deviceSoftwareInventory.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -146,7 +158,15 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
   const queueSoftwareAction = useCallback(
     async (rowId: string, action: SoftwareAction, name: string, version: string) => {
       setPendingActions((prev) => ({ ...prev, [rowId]: action }));
-      const verb = action === 'update' ? 'Update' : 'Uninstall';
+      const actionMessages = action === 'update'
+        ? {
+            error: t('deviceSoftwareInventory.actionMessages.updateError'),
+            success: t('deviceSoftwareInventory.actionMessages.updateSuccess', { name }),
+          }
+        : {
+            error: t('deviceSoftwareInventory.actionMessages.uninstallError'),
+            success: t('deviceSoftwareInventory.actionMessages.uninstallSuccess', { name }),
+          };
       try {
         await runAction({
           request: () =>
@@ -154,15 +174,15 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               method: 'POST',
               body: JSON.stringify(version ? { name, version } : { name }),
             }),
-          errorFallback: `${verb} could not be queued`,
-          successMessage: `${verb} queued for "${name}"`,
+          errorFallback: actionMessages.error,
+          successMessage: actionMessages.success,
         });
       } catch (err) {
         if (err instanceof ActionError && err.status === 401) {
           return;
         }
         if (!(err instanceof ActionError)) {
-          showToast({ message: `${verb} could not be queued`, type: 'error' });
+          showToast({ message: actionMessages.error, type: 'error' });
         }
       } finally {
         setPendingActions((prev) => {
@@ -172,7 +192,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
         });
       }
     },
-    [deviceId]
+    [deviceId, t]
   );
 
   // Get unique publishers for filter dropdown
@@ -191,16 +211,16 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
       const isApple = isApplePublisher(publisher);
       return {
         id: item.id ?? `${item.name ?? item.title ?? 'software'}-${index}`,
-        name: item.name ?? item.title ?? 'Unknown software',
+        name: item.name ?? item.title ?? t('deviceSoftwareInventory.unknownSoftware'),
         version: item.version || '-',
         rawVersion: item.version || '',
         publisher,
         isApple,
-        installDate: formatDate(item.installDate ?? item.installedAt ?? item.install_date, effectiveTimezone),
-        capabilities: actionsAreSupported(osType, isApple),
+        installDate: formatDate(item.installDate ?? item.installedAt ?? item.install_date, effectiveTimezone, locale),
+        capabilities: actionsAreSupported(osType, isApple, t),
       };
     });
-  }, [software, effectiveTimezone, osType]);
+  }, [software, effectiveTimezone, locale, osType, t]);
 
   const filteredRows = useMemo(() => {
     return rows.filter(item => {
@@ -247,7 +267,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading software inventory...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceSoftwareInventory.loading')}</p>
         </div>
       </div>
     );
@@ -262,7 +282,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
           onClick={fetchSoftware}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceSoftwareInventory.retry')}
         </button>
       </div>
     );
@@ -273,7 +293,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Installed Software</h3>
+          <h3 className="text-lg font-semibold">{t('deviceSoftwareInventory.title')}</h3>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {filteredRows.length === rows.length
               ? rows.length
@@ -286,7 +306,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
           className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
+          {t('deviceSoftwareInventory.refresh')}
         </button>
       </div>
 
@@ -297,7 +317,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search by name, publisher, version..."
+            placeholder={t('deviceSoftwareInventory.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -320,7 +340,11 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               >
                 {type === 'apple' && <AppleIcon className="h-3.5 w-3.5" />}
                 {type === 'third-party' && <Box className="h-3.5 w-3.5" />}
-                {type === 'all' ? 'All' : type === 'apple' ? 'Apple' : '3rd Party'}
+                {type === 'all'
+                  ? t('deviceSoftwareInventory.filters.all')
+                  : type === 'apple'
+                    ? t('deviceSoftwareInventory.filters.apple')
+                    : t('deviceSoftwareInventory.filters.thirdParty')}
               </button>
             ))}
           </div>
@@ -335,7 +359,9 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
           }}
           className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 max-w-[200px]"
         >
-          <option value="all">All Publishers ({publishers.length})</option>
+          <option value="all">
+            {t('deviceSoftwareInventory.filters.allPublishers', { count: publishers.length })}
+          </option>
           {publishers.map(pub => (
             <option key={pub} value={pub}>{pub}</option>
           ))}
@@ -349,7 +375,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
             className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
-            Clear
+            {t('deviceSoftwareInventory.filters.clear')}
           </button>
         )}
       </div>
@@ -360,11 +386,11 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
           <table className="min-w-full divide-y">
             <thead className="bg-muted/40 sticky top-0">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Publisher</th>
-                <th className="px-4 py-3">Installed</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">{t('deviceSoftwareInventory.table.name')}</th>
+                <th className="px-4 py-3">{t('deviceSoftwareInventory.table.version')}</th>
+                <th className="px-4 py-3">{t('deviceSoftwareInventory.table.publisher')}</th>
+                <th className="px-4 py-3">{t('deviceSoftwareInventory.table.installed')}</th>
+                <th className="px-4 py-3 text-right">{t('deviceSoftwareInventory.table.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -372,8 +398,8 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-sm text-muted-foreground">
                     {hasActiveFilters
-                      ? 'No software matches your filters.'
-                      : 'No software inventory reported.'}
+                      ? t('deviceSoftwareInventory.emptyFiltered')
+                      : t('deviceSoftwareInventory.empty')}
                   </td>
                 </tr>
               ) : (
@@ -403,7 +429,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                             type="button"
                             data-testid={`software-update-${item.id}`}
                             disabled={!item.capabilities.update.allowed || anyPending}
-                            title={item.capabilities.update.reason ?? 'Queue an update for this package'}
+                            title={item.capabilities.update.reason ?? t('deviceSoftwareInventory.actionTitles.update')}
                             onClick={() => queueSoftwareAction(item.id, 'update', item.name, item.rawVersion)}
                             className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -412,13 +438,13 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                             ) : (
                               <ArrowUpCircle className="h-3.5 w-3.5" />
                             )}
-                            Update
+                            {t('deviceSoftwareInventory.actions.update')}
                           </button>
                           <button
                             type="button"
                             data-testid={`software-uninstall-${item.id}`}
                             disabled={!item.capabilities.uninstall.allowed || anyPending}
-                            title={item.capabilities.uninstall.reason ?? 'Uninstall this package'}
+                            title={item.capabilities.uninstall.reason ?? t('deviceSoftwareInventory.actionTitles.uninstall')}
                             onClick={() =>
                               setConfirmState({ action: 'uninstall', name: item.name, version: item.rawVersion })
                             }
@@ -429,7 +455,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                             ) : (
                               <Trash2 className="h-3.5 w-3.5" />
                             )}
-                            Uninstall
+                            {t('deviceSoftwareInventory.actions.uninstall')}
                           </button>
                         </div>
                       </td>
@@ -446,8 +472,11 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} - {Math.min(startIndex + pageSize, filteredRows.length)} of{' '}
-            {filteredRows.length}
+            {t('deviceSoftwareInventory.pagination.showing', {
+              start: startIndex + 1,
+              end: Math.min(startIndex + pageSize, filteredRows.length),
+              total: filteredRows.length,
+            })}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -456,7 +485,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               disabled={currentPage === 1}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              First
+              {t('deviceSoftwareInventory.pagination.first')}
             </button>
             <button
               type="button"
@@ -467,7 +496,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="text-sm min-w-[100px] text-center">
-              Page {currentPage} of {totalPages}
+              {t('deviceSoftwareInventory.pagination.page', { page: currentPage, total: totalPages })}
             </span>
             <button
               type="button"
@@ -483,7 +512,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               disabled={currentPage === totalPages}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Last
+              {t('deviceSoftwareInventory.pagination.last')}
             </button>
           </div>
         </div>
@@ -504,11 +533,10 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
               <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
               <div className="flex-1">
                 <h4 id="software-uninstall-title" className="text-base font-semibold">
-                  Uninstall {confirmState.name}?
+                  {t('deviceSoftwareInventory.confirm.title', { name: confirmState.name })}
                 </h4>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  This will queue an uninstall command for "{confirmState.name}" on this device.
-                  Uninstalling user data or dependencies may impact other software on the device.
+                  {t('deviceSoftwareInventory.confirm.description', { name: confirmState.name })}
                 </p>
               </div>
             </div>
@@ -518,7 +546,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                 onClick={() => setConfirmState(null)}
                 className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
               >
-                Cancel
+                {t('deviceSoftwareInventory.confirm.cancel')}
               </button>
               <button
                 type="button"
@@ -539,7 +567,7 @@ export default function DeviceSoftwareInventory({ deviceId, timezone, osType }: 
                 }}
                 className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:opacity-90"
               >
-                Uninstall
+                {t('deviceSoftwareInventory.actions.uninstall')}
               </button>
             </div>
           </div>

@@ -16,6 +16,30 @@ vi.mock('../shared/Toast', () => ({
 const fetchWithAuthMock = vi.mocked(fetchWithAuth);
 const showToastMock = vi.mocked(showToast);
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500): Response =>
   ({
     ok,
@@ -48,6 +72,13 @@ const SOFTWARE_FIXTURE = {
 describe('DeviceSoftwareInventory action buttons', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    window.localStorage.setItem('breeze_locale', 'en');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
   });
 
   it('renders Update and Uninstall buttons enabled on Windows', async () => {
@@ -168,5 +199,31 @@ describe('DeviceSoftwareInventory action buttons', () => {
     });
     // No second fetch
     expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders Russian software inventory labels and uninstall dialog', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+    fetchWithAuthMock.mockResolvedValueOnce(makeJsonResponse(SOFTWARE_FIXTURE));
+
+    render(<DeviceSoftwareInventory deviceId={deviceId} osType="macos" />);
+
+    expect(await screen.findByText('Установленное ПО')).toBeInTheDocument();
+    expect(screen.getAllByText('Обновить').length).toBeGreaterThan(0);
+    expect(screen.getByPlaceholderText('Поиск по названию, издателю или версии...')).toBeInTheDocument();
+    expect(screen.getByText('Все')).toBeInTheDocument();
+    expect(screen.getByText('Сторонние')).toBeInTheDocument();
+    expect(screen.getByText('Все издатели (2)')).toBeInTheDocument();
+    expect(screen.getByText('Название')).toBeInTheDocument();
+    expect(screen.getByText('Версия')).toBeInTheDocument();
+    expect(screen.getByText('Издатель')).toBeInTheDocument();
+    expect(screen.getByText('Установлено')).toBeInTheDocument();
+    expect(screen.getByText('Действия')).toBeInTheDocument();
+    expect(screen.getAllByText('Удалить').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId('software-uninstall-sw-chrome'));
+
+    expect(await screen.findByText('Удалить Google Chrome?')).toBeInTheDocument();
+    expect(screen.getByText(/Это поставит в очередь команду удаления/)).toBeInTheDocument();
+    expect(screen.getByText('Отмена')).toBeInTheDocument();
   });
 });
