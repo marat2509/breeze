@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Filter, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 import type { DeviceStatus, OSType } from './DeviceList';
 import { DEVICE_ROLES, getDeviceRoleLabel, getDeviceRoleIcon, type DeviceRole } from '@/lib/deviceRoles';
+import { useI18n } from '@/i18n/react';
 
 type DeviceFiltersProps = {
   statusFilter: DeviceStatus[];
@@ -20,25 +21,16 @@ type DeviceFiltersProps = {
   layout?: 'sidebar' | 'header';
 };
 
-const statusOptions: { value: DeviceStatus; label: string; color: string }[] = [
-  { value: 'online', label: 'Online', color: 'bg-green-500' },
-  { value: 'offline', label: 'Offline', color: 'bg-red-500' },
-  { value: 'maintenance', label: 'Maintenance', color: 'bg-yellow-500' },
-  { value: 'decommissioned', label: 'Decommissioned', color: 'bg-slate-500' },
-  { value: 'updating', label: 'Updating', color: 'bg-blue-500' },
-  { value: 'pending', label: 'Pending', color: 'bg-slate-400' }
+const statusOptions: { value: DeviceStatus; color: string }[] = [
+  { value: 'online', color: 'bg-green-500' },
+  { value: 'offline', color: 'bg-red-500' },
+  { value: 'maintenance', color: 'bg-yellow-500' },
+  { value: 'decommissioned', color: 'bg-slate-500' },
+  { value: 'updating', color: 'bg-blue-500' },
+  { value: 'pending', color: 'bg-slate-400' }
 ];
 
-const osOptions: { value: OSType; label: string }[] = [
-  { value: 'windows', label: 'Windows' },
-  { value: 'macos', label: 'macOS' },
-  { value: 'linux', label: 'Linux' }
-];
-
-const roleOptions: { value: DeviceRole; label: string }[] = DEVICE_ROLES.map(role => ({
-  value: role,
-  label: getDeviceRoleLabel(role),
-}));
+const osOptions: OSType[] = ['windows', 'macos', 'linux'];
 
 export default function DeviceFilters({
   statusFilter,
@@ -56,6 +48,7 @@ export default function DeviceFilters({
   onClearAll,
   layout = 'sidebar'
 }: DeviceFiltersProps) {
+  const { t } = useI18n();
   const [expandedSections, setExpandedSections] = useState({
     status: true,
     os: true,
@@ -102,6 +95,10 @@ export default function DeviceFilters({
   };
 
   const hasActiveFilters = statusFilter.length > 0 || osFilter.length > 0 || roleFilter.length > 0 || siteFilter !== null || tagsFilter.length > 0;
+  const roleOptions: DeviceRole[] = [...DEVICE_ROLES];
+  const statusLabel = (status: DeviceStatus) => t(`devices.status.${status}`, undefined, status);
+  const osLabel = (os: OSType) => t(`devices.osNames.${os}`, undefined, os);
+  const roleLabel = (role: DeviceRole) => t(`devices.roles.${role}`, undefined, getDeviceRoleLabel(role));
 
   if (layout === 'header') {
     return (
@@ -111,7 +108,7 @@ export default function DeviceFilters({
           <details className="group">
             <summary className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted">
               <Filter className="h-4 w-4" />
-              Status
+              {t('devices.filters.status')}
               {statusFilter.length > 0 && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                   {statusFilter.length}
@@ -129,7 +126,7 @@ export default function DeviceFilters({
                     className="h-4 w-4 rounded border-border"
                   />
                   <span className={`h-2 w-2 rounded-full ${option.color}`} />
-                  <span className="text-sm">{option.label}</span>
+                  <span className="text-sm">{statusLabel(option.value)}</span>
                 </label>
               ))}
             </div>
@@ -140,7 +137,7 @@ export default function DeviceFilters({
         <div className="relative">
           <details className="group">
             <summary className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted">
-              OS Type
+              {t('devices.filters.osType')}
               {osFilter.length > 0 && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                   {osFilter.length}
@@ -150,14 +147,14 @@ export default function DeviceFilters({
             </summary>
             <div className="absolute left-0 top-full z-10 mt-1 w-48 rounded-md border bg-card p-2 shadow-lg">
               {osOptions.map(option => (
-                <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted">
+                <label key={option} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted">
                   <input
                     type="checkbox"
-                    checked={osFilter.includes(option.value)}
-                    onChange={() => handleOsToggle(option.value)}
+                    checked={osFilter.includes(option)}
+                    onChange={() => handleOsToggle(option)}
                     className="h-4 w-4 rounded border-border"
                   />
-                  <span className="text-sm">{option.label}</span>
+                  <span className="text-sm">{osLabel(option)}</span>
                 </label>
               ))}
             </div>
@@ -169,7 +166,7 @@ export default function DeviceFilters({
           <div className="relative">
             <details className="group">
               <summary className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted">
-                Device Role
+                {t('devices.filters.deviceRole')}
                 {roleFilter.length > 0 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                     {roleFilter.length}
@@ -179,17 +176,17 @@ export default function DeviceFilters({
               </summary>
               <div className="absolute left-0 top-full z-10 mt-1 max-h-64 w-48 overflow-y-auto rounded-md border bg-card p-2 shadow-lg">
                 {roleOptions.map(option => {
-                  const RoleIcon = getDeviceRoleIcon(option.value);
+                  const RoleIcon = getDeviceRoleIcon(option);
                   return (
-                    <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted">
+                    <label key={option} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted">
                       <input
                         type="checkbox"
-                        checked={roleFilter.includes(option.value)}
-                        onChange={() => handleRoleToggle(option.value)}
+                        checked={roleFilter.includes(option)}
+                        onChange={() => handleRoleToggle(option)}
                         className="h-4 w-4 rounded border-border"
                       />
                       <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm">{option.label}</span>
+                      <span className="text-sm">{roleLabel(option)}</span>
                     </label>
                   );
                 })}
@@ -205,7 +202,7 @@ export default function DeviceFilters({
             onChange={e => onSiteChange(e.target.value || null)}
             className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="">All Sites</option>
+            <option value="">{t('devices.filters.allSites')}</option>
             {sites.map(site => (
               <option key={site.id} value={site.id}>{site.name}</option>
             ))}
@@ -218,7 +215,7 @@ export default function DeviceFilters({
             <details className="group">
               <summary className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted">
                 <Tag className="h-4 w-4" />
-                Tags
+                {t('devices.filters.tags')}
                 {tagsFilter.length > 0 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                     {tagsFilter.length}
@@ -251,7 +248,7 @@ export default function DeviceFilters({
             className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
-            Clear filters
+            {t('devices.filters.clearFilters')}
           </button>
         )}
       </div>
@@ -262,14 +259,14 @@ export default function DeviceFilters({
   return (
     <div className="w-64 rounded-lg border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Filters</h3>
+        <h3 className="text-sm font-semibold">{t('devices.filters.filters')}</h3>
         {hasActiveFilters && (
           <button
             type="button"
             onClick={onClearAll}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            Clear all
+            {t('devices.filters.clearAll')}
           </button>
         )}
       </div>
@@ -281,7 +278,7 @@ export default function DeviceFilters({
           onClick={() => toggleSection('status')}
           className="flex w-full items-center justify-between text-sm font-medium"
         >
-          Status
+          {t('devices.filters.status')}
           {expandedSections.status ? (
             <ChevronUp className="h-4 w-4" />
           ) : (
@@ -299,7 +296,7 @@ export default function DeviceFilters({
                   className="h-4 w-4 rounded border-border"
                 />
                 <span className={`h-2 w-2 rounded-full ${option.color}`} />
-                <span className="text-sm">{option.label}</span>
+                <span className="text-sm">{statusLabel(option.value)}</span>
               </label>
             ))}
           </div>
@@ -313,7 +310,7 @@ export default function DeviceFilters({
           onClick={() => toggleSection('os')}
           className="flex w-full items-center justify-between text-sm font-medium"
         >
-          Operating System
+          {t('devices.filters.operatingSystem')}
           {expandedSections.os ? (
             <ChevronUp className="h-4 w-4" />
           ) : (
@@ -323,14 +320,14 @@ export default function DeviceFilters({
         {expandedSections.os && (
           <div className="mt-2 space-y-2">
             {osOptions.map(option => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-2">
+              <label key={option} className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={osFilter.includes(option.value)}
-                  onChange={() => handleOsToggle(option.value)}
+                  checked={osFilter.includes(option)}
+                  onChange={() => handleOsToggle(option)}
                   className="h-4 w-4 rounded border-border"
                 />
-                <span className="text-sm">{option.label}</span>
+                <span className="text-sm">{osLabel(option)}</span>
               </label>
             ))}
           </div>
@@ -345,7 +342,7 @@ export default function DeviceFilters({
             onClick={() => toggleSection('role')}
             className="flex w-full items-center justify-between text-sm font-medium"
           >
-            Device Role
+            {t('devices.filters.deviceRole')}
             {expandedSections.role ? (
               <ChevronUp className="h-4 w-4" />
             ) : (
@@ -355,17 +352,17 @@ export default function DeviceFilters({
           {expandedSections.role && (
             <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
               {roleOptions.map(option => {
-                const RoleIcon = getDeviceRoleIcon(option.value);
+                const RoleIcon = getDeviceRoleIcon(option);
                 return (
-                  <label key={option.value} className="flex cursor-pointer items-center gap-2">
+                  <label key={option} className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={roleFilter.includes(option.value)}
-                      onChange={() => handleRoleToggle(option.value)}
+                      checked={roleFilter.includes(option)}
+                      onChange={() => handleRoleToggle(option)}
                       className="h-4 w-4 rounded border-border"
                     />
                     <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm">{option.label}</span>
+                    <span className="text-sm">{roleLabel(option)}</span>
                   </label>
                 );
               })}
@@ -382,7 +379,7 @@ export default function DeviceFilters({
             onClick={() => toggleSection('site')}
             className="flex w-full items-center justify-between text-sm font-medium"
           >
-            Site
+            {t('devices.filters.site')}
             {expandedSections.site ? (
               <ChevronUp className="h-4 w-4" />
             ) : (
@@ -396,7 +393,7 @@ export default function DeviceFilters({
                 onChange={e => onSiteChange(e.target.value || null)}
                 className="h-9 w-full rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">All Sites</option>
+                <option value="">{t('devices.filters.allSites')}</option>
                 {sites.map(site => (
                   <option key={site.id} value={site.id}>{site.name}</option>
                 ))}
@@ -414,7 +411,7 @@ export default function DeviceFilters({
             onClick={() => toggleSection('tags')}
             className="flex w-full items-center justify-between text-sm font-medium"
           >
-            Tags
+            {t('devices.filters.tags')}
             {expandedSections.tags ? (
               <ChevronUp className="h-4 w-4" />
             ) : (
@@ -442,17 +439,18 @@ export default function DeviceFilters({
       {/* Active Filters Summary */}
       {hasActiveFilters && (
         <div className="mt-4 border-t pt-4">
-          <p className="text-xs text-muted-foreground">Active filters:</p>
+          <p className="text-xs text-muted-foreground">{t('devices.filters.activeFilters')}</p>
           <div className="mt-2 flex flex-wrap gap-1">
             {statusFilter.map(status => (
               <span
                 key={status}
                 className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
               >
-                {statusOptions.find(o => o.value === status)?.label}
+                {statusLabel(status)}
                 <button
                   type="button"
                   onClick={() => handleStatusToggle(status)}
+                  aria-label={t('devices.filters.removeStatusFilter', { value: statusLabel(status) })}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -464,10 +462,11 @@ export default function DeviceFilters({
                 key={os}
                 className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
               >
-                {osOptions.find(o => o.value === os)?.label}
+                {osLabel(os)}
                 <button
                   type="button"
                   onClick={() => handleOsToggle(os)}
+                  aria-label={t('devices.filters.removeOsFilter', { value: osLabel(os) })}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -479,10 +478,11 @@ export default function DeviceFilters({
                 key={role}
                 className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
               >
-                {getDeviceRoleLabel(role)}
+                {roleLabel(role)}
                 <button
                   type="button"
                   onClick={() => handleRoleToggle(role)}
+                  aria-label={t('devices.filters.removeRoleFilter', { value: roleLabel(role) })}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -495,6 +495,7 @@ export default function DeviceFilters({
                 <button
                   type="button"
                   onClick={() => onSiteChange(null)}
+                  aria-label={t('devices.filters.removeSiteFilter')}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -510,6 +511,7 @@ export default function DeviceFilters({
                 <button
                   type="button"
                   onClick={() => handleTagToggle(tag)}
+                  aria-label={t('devices.filters.removeTagFilter', { value: tag })}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
