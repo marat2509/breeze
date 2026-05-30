@@ -49,6 +49,30 @@ const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500):
 const SITE_A = { id: 'site-aaa-111', orgId: 'org-111', name: 'HQ Office', createdAt: '2026-01-01', deviceCount: 5 };
 const SITE_B = { id: 'site-bbb-222', orgId: 'org-111', name: 'Branch Office', createdAt: '2026-01-02', deviceCount: 3 };
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 function setOrgStore(overrides: Partial<ReturnType<typeof useOrgStore>> = {}) {
   useOrgStoreMock.mockReturnValue({
     currentPartnerId: 'partner-1',
@@ -98,6 +122,11 @@ function getDownloadButton(): HTMLElement {
 
 describe('AddDeviceModal', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
     vi.clearAllMocks();
     setOrgStore();
   });
@@ -355,5 +384,17 @@ describe('AddDeviceModal', () => {
     await waitFor(() => {
       expect(screen.getByText('test-token-xyz')).toBeDefined();
     });
+  });
+
+  it('renders installer controls in Russian', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+
+    render(<AddDeviceModal isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Добавить устройство')).toBeDefined();
+    expect(screen.getAllByText('Скачать установщик')).toHaveLength(2);
+    expect(screen.getByLabelText('Сайт')).toBeDefined();
+    expect(screen.getByLabelText('Количество устройств')).toBeDefined();
+    expect(screen.getByText('Сгенерировать ссылку')).toBeDefined();
   });
 });
