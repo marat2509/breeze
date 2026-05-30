@@ -721,6 +721,27 @@ export const resources = {
           notReady: 'The native login-window desktop path is not ready on this device yet.',
         },
       },
+      macosPermissions: {
+        title: 'macOS Permissions',
+        permissions: {
+          fullDiskAccess: 'Full Disk Access',
+          screenRecording: 'Screen Recording',
+          accessibility: 'Accessibility',
+          remoteDesktop: 'Remote Desktop',
+        },
+        status: {
+          granted: 'Granted',
+          missing: 'Missing',
+          unknown: 'Unknown',
+          autoManagedFda: 'Auto-managed via FDA',
+        },
+        warnings: {
+          fullDiskAccess: 'Full Disk Access must be granted in System Settings > Privacy & Security. Screen Recording and Accessibility will be configured automatically.',
+          remoteDesktop: 'Remote Desktop permission is required for unattended login-window access on macOS 14+.',
+          autoConfigure: 'Screen Recording and Accessibility are being configured automatically. If this persists, check agent logs or restart the agent.',
+        },
+        lastChecked: 'Last checked: {{date}}',
+      },
       messages: {
         roleSaved: 'Device role saved',
         displayNameCleared: 'Display name cleared',
@@ -1925,6 +1946,27 @@ export const resources = {
           missingEntitlement: 'Нативный доступ к рабочему столу на экране входа требует одобрения Apple entitlement.',
           notReady: 'Нативный доступ к рабочему столу на экране входа пока не готов на этом устройстве.',
         },
+      },
+      macosPermissions: {
+        title: 'Разрешения macOS',
+        permissions: {
+          fullDiskAccess: 'Полный доступ к диску',
+          screenRecording: 'Запись экрана',
+          accessibility: 'Универсальный доступ',
+          remoteDesktop: 'Удалённый рабочий стол',
+        },
+        status: {
+          granted: 'Разрешено',
+          missing: 'Отсутствует',
+          unknown: 'Неизвестно',
+          autoManagedFda: 'Автоуправление через FDA',
+        },
+        warnings: {
+          fullDiskAccess: 'Полный доступ к диску нужно выдать в System Settings > Privacy & Security. Запись экрана и универсальный доступ будут настроены автоматически.',
+          remoteDesktop: 'Разрешение Remote Desktop требуется для unattended-доступа к экрану входа на macOS 14+.',
+          autoConfigure: 'Запись экрана и универсальный доступ настраиваются автоматически. Если это не проходит, проверьте логи агента или перезапустите агент.',
+        },
+        lastChecked: 'Последняя проверка: {{date}}',
       },
       messages: {
         roleSaved: 'Роль устройства сохранена',
