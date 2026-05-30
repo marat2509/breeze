@@ -50,9 +50,112 @@ function mockInitialLoad(displayName: string | null) {
   });
 }
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
+function installMemoryStorage(locale?: 'en' | 'ru') {
+  Object.defineProperty(window, 'localStorage', {
+    value: makeMemoryStorage(),
+    writable: true,
+    configurable: true,
+  });
+  if (locale) window.localStorage.setItem('breeze_locale', locale);
+  document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
+}
+
+describe('DeviceInfoTab localization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installMemoryStorage('ru');
+  });
+
+  it('renders Russian section labels, values, and edit controls', async () => {
+    fetchWithAuthMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url === `/devices/${deviceId}` && method === 'GET') {
+        return makeJsonResponse({
+          hostname: 'TST-LAPTOP-01',
+          displayName: null,
+          osType: 'windows',
+          osVersion: '11',
+          osBuild: '22631',
+          architecture: 'x64',
+          agentVersion: '1.2.3',
+          status: 'online',
+          lastSeenAt: '2026-05-30T12:00:00.000Z',
+          enrolledAt: '2026-05-01T12:00:00.000Z',
+          lastUser: 'ACME\\admin',
+          uptimeSeconds: 3661,
+          deviceRole: 'server',
+          deviceRoleSource: 'manual',
+          tags: ['prod'],
+          hardware: {
+            serialNumber: 'SN-123',
+            manufacturer: 'Dell',
+            model: 'PowerEdge',
+            cpuModel: 'Xeon',
+            cpuCores: 8,
+            cpuThreads: 16,
+            ramTotalMb: 32768,
+            diskTotalGb: 2048,
+            gpuModel: 'Integrated',
+            biosVersion: '1.0.0',
+          },
+        });
+      }
+      if (url === '/custom-fields') return makeJsonResponse({ data: [] });
+      return makeJsonResponse({}, false, 404);
+    });
+
+    render(<DeviceInfoTab deviceId={deviceId} />);
+
+    expect(await screen.findByText('Система')).toBeInTheDocument();
+    expect(screen.getByText('Имя хоста')).toBeInTheDocument();
+    expect(screen.getByText('Отображаемое имя')).toBeInTheDocument();
+    expect(screen.getByText('Не задано')).toBeInTheDocument();
+    expect(screen.getByText('Роль устройства')).toBeInTheDocument();
+    expect(screen.getByText('Сервер')).toBeInTheDocument();
+    expect(screen.getByText('Задано вручную')).toBeInTheDocument();
+    expect(screen.getByText('Операционная система')).toBeInTheDocument();
+    expect(screen.getByText('Сводка оборудования')).toBeInTheDocument();
+    expect(screen.getByText('Версия агента')).toBeInTheDocument();
+    expect(screen.getByText('В сети')).toBeInTheDocument();
+    expect(screen.getByText('Последняя активность')).toBeInTheDocument();
+    expect(screen.getByText('Теги')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Редактировать отображаемое имя'));
+    expect(screen.getByPlaceholderText('Оставьте пустым, чтобы очистить')).toBeInTheDocument();
+    expect(screen.getByTitle('Сохранить')).toBeInTheDocument();
+    expect(screen.getByTitle('Отмена')).toBeInTheDocument();
+  });
+});
+
 describe('DeviceInfoTab — display name inline edit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installMemoryStorage();
   });
 
   it('saves a non-empty display name via PATCH', async () => {
@@ -195,6 +298,7 @@ describe('DeviceInfoTab — display name inline edit', () => {
 describe('DeviceInfoTab — role + custom-field mutations also use runAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installMemoryStorage();
   });
 
   it('Device Role save fires success toast via runAction', async () => {

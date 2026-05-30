@@ -12,6 +12,7 @@ import {
   getDeviceRoleSourceLabel,
   getDeviceRoleSourceColor,
 } from '@/lib/deviceRoles';
+import { useI18n } from '@/i18n/react';
 
 type DeviceInfoTabProps = {
   deviceId: string;
@@ -73,11 +74,13 @@ function formatDisk(valueGb: number | null | undefined): string {
   return `${valueGb.toFixed(1)} GB`;
 }
 
-function formatDate(dateString: string | null | undefined): string {
+type TFunction = ReturnType<typeof useI18n>['t'];
+
+function formatDate(dateString: string | null | undefined, locale: 'en' | 'ru'): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleString([], {
+  return date.toLocaleString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -86,15 +89,16 @@ function formatDate(dateString: string | null | undefined): string {
   });
 }
 
-const osTypeLabels: Record<string, string> = {
+const osTypeFallbacks: Record<string, string> = {
   windows: 'Windows',
   macos: 'macOS',
   linux: 'Linux',
 };
 
-function formatOsType(raw: string | null | undefined): string {
+function formatOsType(raw: string | null | undefined, t: TFunction): string {
   if (!raw) return '—';
-  return osTypeLabels[raw.toLowerCase()] ?? raw;
+  const normalized = raw.toLowerCase();
+  return t(`devices.osNames.${normalized}`, undefined, osTypeFallbacks[normalized] ?? raw);
 }
 
 function formatOsVersionForDisplay(raw: string | null | undefined): string {
@@ -103,36 +107,54 @@ function formatOsVersionForDisplay(raw: string | null | undefined): string {
   return raw.replace(/^(darwin|linux)\s+/i, '');
 }
 
-function formatDesktopAccessMode(mode: DesktopAccessState['mode'] | undefined): string {
+function formatDesktopAccessMode(mode: DesktopAccessState['mode'] | undefined, t: TFunction): string {
   switch (mode) {
     case 'user_session':
-      return 'Ready After User Login';
+      return t('deviceInfo.desktopAccess.modes.userSession');
     case 'login_window':
-      return 'Ready At Login Window';
+      return t('deviceInfo.desktopAccess.modes.loginWindow');
     case 'unavailable':
-      return 'Unavailable';
+      return t('deviceInfo.values.unavailable');
     default:
-      return 'Unknown';
+      return t('deviceInfo.values.unknown');
   }
 }
 
-function formatDesktopAccessReason(reason: DesktopAccessState['reason'] | undefined | null): string {
+function formatDesktopAccessReason(reason: DesktopAccessState['reason'] | undefined | null, t: TFunction): string {
   switch (reason) {
     case 'missing_permission':
-      return 'Missing Permission';
+      return t('deviceInfo.desktopAccess.reasons.missingPermission');
     case 'missing_entitlement':
-      return 'Missing Entitlement';
+      return t('deviceInfo.desktopAccess.reasons.missingEntitlement');
     case 'helper_not_connected':
-      return 'Helper Not Connected';
+      return t('deviceInfo.desktopAccess.reasons.helperNotConnected');
     case 'virtual_display_unavailable':
-      return 'Virtual Display Unavailable';
+      return t('deviceInfo.desktopAccess.reasons.virtualDisplayUnavailable');
     case 'unsupported_os':
-      return 'Unsupported macOS Version';
+      return t('deviceInfo.desktopAccess.reasons.unsupportedOs');
     case 'manual_install':
-      return 'Manual Install';
+      return t('deviceInfo.desktopAccess.reasons.manualInstall');
     default:
       return '—';
   }
+}
+
+function formatDeviceRoleLabel(role: string, t: TFunction): string {
+  return t(`devices.roles.${role}`, undefined, getDeviceRoleLabel(role));
+}
+
+function formatDeviceRoleSourceLabel(source: string, t: TFunction): string {
+  return t(`deviceInfo.roleSources.${source}`, undefined, getDeviceRoleSourceLabel(source));
+}
+
+function formatCoresThreads(
+  cores: number | null | undefined,
+  threads: number | null | undefined,
+  t: TFunction,
+): string {
+  if (!cores) return '—';
+  if (threads) return t('deviceInfo.values.coresThreads', { cores, threads });
+  return t('deviceInfo.values.coresOnly', { cores });
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -164,6 +186,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
+  const { locale, t } = useI18n();
   const [info, setInfo] = useState<DeviceInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -185,7 +208,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
     try {
       const response = await fetchWithAuth(`/devices/${deviceId}`);
       if (!response.ok) {
-        let detail = `Failed to fetch device details (HTTP ${response.status})`;
+        let detail = t('deviceInfo.errors.fetchDetailsHttp', { status: response.status });
         try {
           const body = await response.json();
           if (body.error) detail = body.error;
@@ -195,11 +218,11 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
       const data = await response.json();
       setInfo(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch device details');
+      setError(err instanceof Error ? err.message : t('deviceInfo.errors.fetchDetails'));
     } finally {
       setLoading(false);
     }
-  }, [deviceId]);
+  }, [deviceId, t]);
 
   useEffect(() => {
     fetchInfo();
@@ -231,8 +254,8 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
           method: 'PATCH',
           body: JSON.stringify({ deviceRole: selectedRole }),
         }),
-        errorFallback: 'Failed to save device role',
-        successMessage: 'Device role saved',
+        errorFallback: t('deviceInfo.errors.saveRole'),
+        successMessage: t('deviceInfo.messages.roleSaved'),
       });
       setInfo(prev => prev ? { ...prev, deviceRole: selectedRole, deviceRoleSource: 'manual' } : prev);
       setEditingRole(false);
@@ -242,7 +265,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
         setSaveError(err.message);
       } else {
         console.error('Failed to save device role:', err);
-        setSaveError('Network error. Please check your connection and try again.');
+        setSaveError(t('deviceInfo.errors.network'));
       }
     } finally {
       setSavingRole(false);
@@ -261,10 +284,10 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
           method: 'PATCH',
           body: JSON.stringify(payload),
         }),
-        errorFallback: 'Failed to save display name',
+        errorFallback: t('deviceInfo.errors.saveDisplayName'),
         successMessage: payload.displayName === null
-          ? 'Display name cleared'
-          : 'Display name saved',
+          ? t('deviceInfo.messages.displayNameCleared')
+          : t('deviceInfo.messages.displayNameSaved'),
       });
       setInfo(prev => prev ? { ...prev, displayName: payload.displayName } : prev);
       setEditingDisplayName(false);
@@ -276,7 +299,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
         setSaveError(err.message);
       } else {
         console.error('Failed to save display name:', err);
-        setSaveError('Network error. Please check your connection and try again.');
+        setSaveError(t('deviceInfo.errors.network'));
       }
     } finally {
       setSavingDisplayName(false);
@@ -298,8 +321,8 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
           method: 'PATCH',
           body: JSON.stringify({ customFields: { [fieldKey]: editValue } }),
         }),
-        errorFallback: `Failed to save "${fieldKey}"`,
-        successMessage: 'Custom field saved',
+        errorFallback: t('deviceInfo.errors.saveCustomField', { fieldKey }),
+        successMessage: t('deviceInfo.messages.customFieldSaved'),
       });
       setInfo(prev => prev ? {
         ...prev,
@@ -312,7 +335,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
         setSaveError(err.message);
       } else {
         console.error(`Failed to save custom field "${fieldKey}":`, err);
-        setSaveError('Network error. Please check your connection and try again.');
+        setSaveError(t('deviceInfo.errors.network'));
       }
     } finally {
       setSaving(false);
@@ -321,12 +344,12 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
 
   const renderFieldValue = (def: CustomFieldDef, value: unknown): string => {
     if (value === null || value === undefined || value === '') return '—';
-    if (def.type === 'boolean') return value ? 'Yes' : 'No';
+    if (def.type === 'boolean') return value ? t('deviceInfo.values.yes') : t('deviceInfo.values.no');
     if (def.type === 'dropdown' && def.options?.choices) {
       const choice = def.options.choices.find(c => c.value === value);
       return choice?.label ?? String(value);
     }
-    if (def.type === 'date' && typeof value === 'string') return formatDate(value);
+    if (def.type === 'date' && typeof value === 'string') return formatDate(value, locale);
     return String(value);
   };
 
@@ -365,7 +388,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
               editValue ? 'border-primary bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
             }`}
           >
-            {editValue ? 'Yes' : 'No'}
+            {editValue ? t('deviceInfo.values.yes') : t('deviceInfo.values.no')}
           </button>
         );
       case 'dropdown':
@@ -376,7 +399,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
             className={inputClass}
             autoFocus
           >
-            <option value="">Select...</option>
+            <option value="">{t('deviceInfo.actions.select')}</option>
             {def.options?.choices?.map(c => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
@@ -402,7 +425,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading device details...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceInfo.loading')}</p>
         </div>
       </div>
     );
@@ -417,7 +440,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
           onClick={fetchInfo}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceInfo.actions.retry')}
         </button>
       </div>
     );
@@ -440,10 +463,10 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
           {saveError}
         </div>
       )}
-      <Section title="System" icon={<Monitor className="h-4 w-4 text-muted-foreground" />}>
-        <InfoRow label="Hostname" value={info?.hostname ?? '—'} />
+      <Section title={t('deviceInfo.sections.system')} icon={<Monitor className="h-4 w-4 text-muted-foreground" />}>
+        <InfoRow label={t('deviceInfo.fields.hostname')} value={info?.hostname ?? '—'} />
         <div className="flex items-center justify-between py-2">
-          <dt className="text-sm text-muted-foreground">Display Name</dt>
+          <dt className="text-sm text-muted-foreground">{t('deviceInfo.fields.displayName')}</dt>
           <dd className="text-sm font-medium text-right flex items-center gap-2">
             {editingDisplayName ? (
               <>
@@ -456,7 +479,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                     if (e.key === 'Escape') setEditingDisplayName(false);
                   }}
                   maxLength={255}
-                  placeholder="Leave blank to clear"
+                  placeholder={t('deviceInfo.placeholders.displayName')}
                   className="h-8 w-48 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   autoFocus
                 />
@@ -465,7 +488,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                   onClick={handleSaveDisplayName}
                   disabled={savingDisplayName}
                   className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10"
-                  title="Save"
+                  title={t('deviceInfo.actions.save')}
                 >
                   <Check className="h-4 w-4" />
                 </button>
@@ -473,7 +496,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                   type="button"
                   onClick={() => setEditingDisplayName(false)}
                   className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-                  title="Cancel"
+                  title={t('common.cancel')}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -481,7 +504,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
             ) : (
               <>
                 <span className={info?.displayName ? '' : 'text-muted-foreground italic'}>
-                  {info?.displayName ?? 'Not set'}
+                  {info?.displayName ?? t('deviceInfo.values.notSet')}
                 </span>
                 <button
                   type="button"
@@ -491,7 +514,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                     setSaveError(null);
                   }}
                   className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Edit display name"
+                  title={t('deviceInfo.actions.editDisplayName')}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -499,9 +522,9 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
             )}
           </dd>
         </div>
-        <InfoRow label="Serial Number" value={hw?.serialNumber ?? '—'} />
-        <InfoRow label="Manufacturer" value={hw?.manufacturer ?? '—'} />
-        <InfoRow label="Model" value={hw?.model ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.serialNumber')} value={hw?.serialNumber ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.manufacturer')} value={hw?.manufacturer ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.model')} value={hw?.model ?? '—'} />
       </Section>
 
       <div className="rounded-lg border bg-card p-6 shadow-sm">
@@ -511,11 +534,11 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
             const RoleIcon = getDeviceRoleIcon(role);
             return <RoleIcon className="h-4 w-4 text-muted-foreground" />;
           })()}
-          <h3 className="text-sm font-semibold">Device Role</h3>
+          <h3 className="text-sm font-semibold">{t('deviceInfo.sections.deviceRole')}</h3>
         </div>
         <dl className="divide-y">
           <div className="flex items-center justify-between py-2">
-            <dt className="text-sm text-muted-foreground">Role</dt>
+            <dt className="text-sm text-muted-foreground">{t('deviceInfo.fields.role')}</dt>
             <dd className="text-sm font-medium text-right flex items-center gap-2">
               {editingRole ? (
                 <>
@@ -527,7 +550,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                   >
                     {DEVICE_ROLES.map(role => (
                       <option key={role} value={role}>
-                        {getDeviceRoleLabel(role)}
+                        {formatDeviceRoleLabel(role, t)}
                       </option>
                     ))}
                   </select>
@@ -536,7 +559,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                     onClick={handleSaveRole}
                     disabled={savingRole}
                     className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10"
-                    title="Save"
+                    title={t('deviceInfo.actions.save')}
                   >
                     <Check className="h-4 w-4" />
                   </button>
@@ -544,7 +567,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                     type="button"
                     onClick={() => setEditingRole(false)}
                     className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-                    title="Cancel"
+                    title={t('common.cancel')}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -557,7 +580,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                     return (
                       <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-medium">
                         <RoleIcon className="h-3 w-3" />
-                        {getDeviceRoleLabel(role)}
+                        {formatDeviceRoleLabel(role, t)}
                       </span>
                     );
                   })()}
@@ -569,7 +592,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                       setSaveError(null);
                     }}
                     className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                    title="Change role"
+                    title={t('deviceInfo.actions.changeRole')}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -578,79 +601,75 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
             </dd>
           </div>
           <div className="flex justify-between py-2">
-            <dt className="text-sm text-muted-foreground">Source</dt>
+            <dt className="text-sm text-muted-foreground">{t('deviceInfo.fields.source')}</dt>
             <dd>
               <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getDeviceRoleSourceColor(info?.deviceRoleSource ?? 'auto')}`}>
-                {getDeviceRoleSourceLabel(info?.deviceRoleSource ?? 'auto')}
+                {formatDeviceRoleSourceLabel(info?.deviceRoleSource ?? 'auto', t)}
               </span>
             </dd>
           </div>
         </dl>
       </div>
 
-      <Section title="Operating System" icon={<Info className="h-4 w-4 text-muted-foreground" />}>
-        <InfoRow label="OS Type" value={formatOsType(info?.osType)} />
-        <InfoRow label="OS Version" value={formatOsVersionForDisplay(info?.osVersion)} />
-        <InfoRow label="OS Build" value={info?.osBuild ?? '—'} />
-        <InfoRow label="Architecture" value={info?.architecture ?? '—'} />
+      <Section title={t('deviceInfo.sections.operatingSystem')} icon={<Info className="h-4 w-4 text-muted-foreground" />}>
+        <InfoRow label={t('deviceInfo.fields.osType')} value={formatOsType(info?.osType, t)} />
+        <InfoRow label={t('deviceInfo.fields.osVersion')} value={formatOsVersionForDisplay(info?.osVersion)} />
+        <InfoRow label={t('deviceInfo.fields.osBuild')} value={info?.osBuild ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.architecture')} value={info?.architecture ?? '—'} />
       </Section>
 
-      <Section title="Hardware Summary" icon={<Cpu className="h-4 w-4 text-muted-foreground" />}>
-        <InfoRow label="CPU Model" value={hw?.cpuModel ?? '—'} />
-        <InfoRow label="Cores / Threads" value={
-          hw?.cpuCores
-            ? `${hw.cpuCores} cores${hw.cpuThreads ? ` / ${hw.cpuThreads} threads` : ''}`
-            : '—'
-        } />
-        <InfoRow label="RAM Total" value={formatRam(hw?.ramTotalMb)} />
-        <InfoRow label="Disk Total" value={formatDisk(hw?.diskTotalGb)} />
-        <InfoRow label="GPU" value={hw?.gpuModel ?? '—'} />
-        <InfoRow label="BIOS Version" value={hw?.biosVersion ?? '—'} />
+      <Section title={t('deviceInfo.sections.hardwareSummary')} icon={<Cpu className="h-4 w-4 text-muted-foreground" />}>
+        <InfoRow label={t('deviceInfo.fields.cpuModel')} value={hw?.cpuModel ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.coresThreads')} value={formatCoresThreads(hw?.cpuCores, hw?.cpuThreads, t)} />
+        <InfoRow label={t('deviceInfo.fields.ramTotal')} value={formatRam(hw?.ramTotalMb)} />
+        <InfoRow label={t('deviceInfo.fields.diskTotal')} value={formatDisk(hw?.diskTotalGb)} />
+        <InfoRow label={t('deviceInfo.fields.gpu')} value={hw?.gpuModel ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.biosVersion')} value={hw?.biosVersion ?? '—'} />
       </Section>
 
-      <Section title="Agent" icon={<Shield className="h-4 w-4 text-muted-foreground" />}>
-        <InfoRow label="Agent Version" value={info?.agentVersion ?? '—'} />
+      <Section title={t('deviceInfo.sections.agent')} icon={<Shield className="h-4 w-4 text-muted-foreground" />}>
+        <InfoRow label={t('deviceInfo.fields.agentVersion')} value={info?.agentVersion ?? '—'} />
         <div className="flex justify-between py-2">
-          <dt className="text-sm text-muted-foreground">Status</dt>
+          <dt className="text-sm text-muted-foreground">{t('deviceInfo.fields.status')}</dt>
           <dd>
             <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusColors[status] ?? 'bg-muted/40 text-muted-foreground border-muted'}`}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {t(`devices.status.${status}`, undefined, status.charAt(0).toUpperCase() + status.slice(1))}
             </span>
           </dd>
         </div>
-        <InfoRow label="Last Seen" value={formatDate(info?.lastSeenAt)} />
-        <InfoRow label="Enrolled" value={formatDate(info?.enrolledAt)} />
-        <InfoRow label="System Uptime" value={formatUptime(info?.uptimeSeconds)} />
-        <InfoRow label="Logged-in User" value={info?.lastUser ?? '—'} />
+        <InfoRow label={t('deviceInfo.fields.lastSeen')} value={formatDate(info?.lastSeenAt, locale)} />
+        <InfoRow label={t('deviceInfo.fields.enrolled')} value={formatDate(info?.enrolledAt, locale)} />
+        <InfoRow label={t('deviceInfo.fields.systemUptime')} value={formatUptime(info?.uptimeSeconds)} />
+        <InfoRow label={t('deviceInfo.fields.loggedInUser')} value={info?.lastUser ?? '—'} />
       </Section>
 
       {info?.osType === 'macos' && info?.desktopAccess && (
-        <Section title="Desktop Access" icon={<Monitor className="h-4 w-4 text-muted-foreground" />}>
-          <InfoRow label="Mode" value={formatDesktopAccessMode(info.desktopAccess.mode)} />
-          <InfoRow label="Login UI Reachable" value={info.desktopAccess.loginUiReachable ? 'Yes' : 'No'} />
-          <InfoRow label="Virtual Display" value={info.desktopAccess.virtualDisplayReady ? 'Ready' : 'Not Ready'} />
+        <Section title={t('deviceInfo.sections.desktopAccess')} icon={<Monitor className="h-4 w-4 text-muted-foreground" />}>
+          <InfoRow label={t('deviceInfo.fields.mode')} value={formatDesktopAccessMode(info.desktopAccess.mode, t)} />
+          <InfoRow label={t('deviceInfo.fields.loginUiReachable')} value={info.desktopAccess.loginUiReachable ? t('deviceInfo.values.yes') : t('deviceInfo.values.no')} />
+          <InfoRow label={t('deviceInfo.fields.virtualDisplay')} value={info.desktopAccess.virtualDisplayReady ? t('deviceInfo.values.ready') : t('deviceInfo.values.notReady')} />
           <InfoRow
-            label="Remote Desktop Permission"
+            label={t('deviceInfo.fields.remoteDesktopPermission')}
             value={
               info.desktopAccess.remoteDesktopPermission == null
-                ? 'Unknown'
-                : info.desktopAccess.remoteDesktopPermission ? 'Granted' : 'Missing'
+                ? t('deviceInfo.values.unknown')
+                : info.desktopAccess.remoteDesktopPermission ? t('deviceInfo.values.granted') : t('deviceInfo.values.missing')
             }
           />
-          <InfoRow label="Reason" value={formatDesktopAccessReason(info.desktopAccess.reason)} />
-          <InfoRow label="Last Checked" value={formatDate(info.desktopAccess.checkedAt)} />
+          <InfoRow label={t('deviceInfo.fields.reason')} value={formatDesktopAccessReason(info.desktopAccess.reason, t)} />
+          <InfoRow label={t('deviceInfo.fields.lastChecked')} value={formatDate(info.desktopAccess.checkedAt, locale)} />
           {info.desktopAccess.mode === 'unavailable' && (
             <div className="pt-3">
               <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <p className="text-sm text-amber-700 dark:text-amber-400">
                   {info.desktopAccess.reason === 'unsupported_os'
-                    ? 'This Mac is below the macOS 14+ floor for the native login-window desktop path.'
+                    ? t('deviceInfo.desktopAccess.warnings.unsupportedOs')
                     : info.desktopAccess.reason === 'manual_install'
-                      ? 'Login-window reachability is only advertised for managed installs with the desktop helper deployed.'
+                      ? t('deviceInfo.desktopAccess.warnings.manualInstall')
                       : info.desktopAccess.reason === 'missing_entitlement'
-                        ? 'The native login-window desktop path is gated behind Apple entitlement approval.'
-                        : 'The native login-window desktop path is not ready on this device yet.'}
+                        ? t('deviceInfo.desktopAccess.warnings.missingEntitlement')
+                        : t('deviceInfo.desktopAccess.warnings.notReady')}
                 </p>
               </div>
             </div>
@@ -659,14 +678,14 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
       )}
 
       {info?.osType === 'macos' && info?.tccPermissions && (
-        <MacOSPermissionsCard deviceId={deviceId} tccPermissions={info.tccPermissions} formatDate={formatDate} />
+        <MacOSPermissionsCard deviceId={deviceId} tccPermissions={info.tccPermissions} formatDate={value => formatDate(value, locale)} />
       )}
 
       {tags.length > 0 && (
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Tag className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Tags</h3>
+              <h3 className="text-sm font-semibold">{t('deviceInfo.sections.tags')}</h3>
             </div>
             <div className="flex flex-wrap gap-2">
               {tags.map(tag => (
@@ -685,7 +704,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
         <div className="rounded-lg border bg-card p-6 shadow-sm lg:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Custom Fields</h3>
+            <h3 className="text-sm font-semibold">{t('deviceInfo.sections.customFields')}</h3>
           </div>
           <dl className="divide-y">
             {applicableFields.map(def => {
@@ -707,7 +726,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                           onClick={() => handleSaveField(def.fieldKey)}
                           disabled={saving}
                           className="inline-flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10"
-                          title="Save"
+                          title={t('deviceInfo.actions.save')}
                         >
                           <Check className="h-4 w-4" />
                         </button>
@@ -715,7 +734,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                           type="button"
                           onClick={() => setEditingField(null)}
                           className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-                          title="Cancel"
+                          title={t('common.cancel')}
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -731,7 +750,7 @@ export default function DeviceInfoTab({ deviceId }: DeviceInfoTabProps) {
                             setSaveError(null);
                           }}
                           className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                          title="Edit"
+                          title={t('deviceInfo.actions.edit')}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
