@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Bell,
   ClipboardCheck,
   HardDrive,
   Layers,
-  Monitor,
   PackageCheck,
   RefreshCw,
   Shield,
@@ -15,6 +14,8 @@ import {
 
 import { friendlyFetchError } from '../../lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -69,28 +70,34 @@ const ALL_FEATURE_TYPES: FeatureType[] = [
   'monitoring',
 ];
 
-const FEATURE_META: Record<FeatureType, { label: string; icon: React.ReactNode }> = {
-  patch:        { label: 'Patch Management',    icon: <PackageCheck className="h-5 w-5" /> },
-  alert_rule:   { label: 'Alert Rules',         icon: <Bell className="h-5 w-5" /> },
-  automation:   { label: 'Automation',           icon: <Zap className="h-5 w-5" /> },
-  maintenance:  { label: 'Maintenance Windows', icon: <Wrench className="h-5 w-5" /> },
-  compliance:   { label: 'Compliance',           icon: <ClipboardCheck className="h-5 w-5" /> },
-  security:     { label: 'Security',             icon: <Shield className="h-5 w-5" /> },
-  backup:       { label: 'Backup',               icon: <HardDrive className="h-5 w-5" /> },
-  monitoring:   { label: 'Monitoring',           icon: <Activity className="h-5 w-5" /> },
-};
-
-const LEVEL_LABELS: Record<AssignmentLevel, string> = {
-  partner: 'Partner',
-  organization: 'Organization',
-  site: 'Site',
-  device_group: 'Device Group',
-  device: 'Device',
+const FEATURE_ICONS: Record<FeatureType, ReactNode> = {
+  patch: <PackageCheck className="h-5 w-5" />,
+  alert_rule: <Bell className="h-5 w-5" />,
+  automation: <Zap className="h-5 w-5" />,
+  maintenance: <Wrench className="h-5 w-5" />,
+  compliance: <ClipboardCheck className="h-5 w-5" />,
+  security: <Shield className="h-5 w-5" />,
+  backup: <HardDrive className="h-5 w-5" />,
+  monitoring: <Activity className="h-5 w-5" />,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function summarizeSettings(settings: Record<string, unknown> | null): string[] {
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
+
+function featureLabel(featureType: FeatureType, t: Translate): string {
+  return t(`deviceEffectiveConfig.features.${featureType}`, undefined, featureType);
+}
+
+function levelLabel(level: AssignmentLevel, t: Translate): string {
+  return t(`deviceEffectiveConfig.levels.${level}`, undefined, level);
+}
+
+function countLabel(count: number, singularKey: string, pluralKey: string, t: Translate): string {
+  return count === 1 ? t(singularKey) : t(pluralKey);
+}
+
+function summarizeSettings(settings: Record<string, unknown> | null, t: Translate): string[] {
   if (!settings || Object.keys(settings).length === 0) return [];
   const items: string[] = [];
   for (const [key, value] of Object.entries(settings)) {
@@ -102,11 +109,25 @@ function summarizeSettings(settings: Record<string, unknown> | null): string[] {
       .replace(/^\s/, '')
       .toLowerCase();
     if (typeof value === 'boolean') {
-      items.push(`${label}: ${value ? 'yes' : 'no'}`);
+      items.push(t('deviceEffectiveConfig.settings.line', {
+        label,
+        value: value ? t('deviceEffectiveConfig.settings.yes') : t('deviceEffectiveConfig.settings.no'),
+      }));
     } else if (typeof value === 'string' || typeof value === 'number') {
-      items.push(`${label}: ${value}`);
+      items.push(t('deviceEffectiveConfig.settings.line', { label, value }));
     } else if (Array.isArray(value)) {
-      items.push(`${label}: ${value.length} item${value.length !== 1 ? 's' : ''}`);
+      items.push(t('deviceEffectiveConfig.settings.line', {
+        label,
+        value: t('deviceEffectiveConfig.settings.items', {
+          count: value.length,
+          itemLabel: countLabel(
+            value.length,
+            'deviceEffectiveConfig.settings.item',
+            'deviceEffectiveConfig.settings.itemsPlural',
+            t,
+          ),
+        }),
+      }));
     }
     if (items.length >= 4) break; // limit to 4 summary lines
   }
@@ -120,6 +141,7 @@ type DeviceEffectiveConfigTabProps = {
 };
 
 export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveConfigTabProps) {
+  const { t } = useI18n();
   const [data, setData] = useState<EffectiveConfiguration | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -151,7 +173,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading effective configuration...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceEffectiveConfig.loading')}</p>
         </div>
       </div>
     );
@@ -168,7 +190,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
           onClick={fetchEffectiveConfig}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceEffectiveConfig.retry')}
         </button>
       </div>
     );
@@ -180,16 +202,15 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
     return (
       <div className="rounded-lg border bg-card p-8 text-center shadow-sm">
         <Layers className="mx-auto h-10 w-10 text-muted-foreground/50" />
-        <h3 className="mt-4 font-semibold">No Configuration Policies</h3>
+        <h3 className="mt-4 font-semibold">{t('deviceEffectiveConfig.emptyTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          No configuration policies are currently assigned to this device.
-          Assign policies through the Configuration Policies page.
+          {t('deviceEffectiveConfig.emptyDescription')}
         </p>
         <a
           href="/configuration-policies"
           className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Go to Config Policies
+          {t('deviceEffectiveConfig.emptyAction')}
         </a>
       </div>
     );
@@ -204,11 +225,24 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Effective Configuration</h3>
+          <h3 className="text-lg font-semibold">{t('deviceEffectiveConfig.title')}</h3>
           <p className="text-sm text-muted-foreground">
-            Resolved configuration from {inheritanceChain.length} assigned{' '}
-            {inheritanceChain.length === 1 ? 'policy' : 'policies'} across{' '}
-            {configuredTypes.length} feature{configuredTypes.length !== 1 ? 's' : ''}
+            {t('deviceEffectiveConfig.summary', {
+              policies: inheritanceChain.length,
+              policyLabel: countLabel(
+                inheritanceChain.length,
+                'deviceEffectiveConfig.policySingular',
+                'deviceEffectiveConfig.policyPlural',
+                t,
+              ),
+              features: configuredTypes.length,
+              featureLabel: countLabel(
+                configuredTypes.length,
+                'deviceEffectiveConfig.featureSingular',
+                'deviceEffectiveConfig.featurePlural',
+                t,
+              ),
+            })}
           </p>
         </div>
         <button
@@ -217,7 +251,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
           className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
+          {t('deviceEffectiveConfig.refresh')}
         </button>
       </div>
 
@@ -225,24 +259,24 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {configuredTypes.map((ft) => {
           const feature = features[ft]!;
-          const meta = FEATURE_META[ft];
           const settings = summarizeSettings(
-            feature.inlineSettings as Record<string, unknown> | null
+            feature.inlineSettings as Record<string, unknown> | null,
+            t,
           );
 
           return (
             <div key={ft} className="rounded-lg border bg-card p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  {meta.icon}
+                  {FEATURE_ICONS[ft]}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-semibold">{meta.label}</h4>
+                  <h4 className="font-semibold">{featureLabel(ft, t)}</h4>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    From: <span className="font-medium text-foreground">{feature.sourcePolicyName}</span>
+                    {t('deviceEffectiveConfig.from')} <span className="font-medium text-foreground">{feature.sourcePolicyName}</span>
                     {' '}
                     <span className="inline-flex items-center rounded-full border bg-muted/50 px-1.5 py-0.5 text-xs text-muted-foreground">
-                      {LEVEL_LABELS[feature.sourceLevel]}
+                      {levelLabel(feature.sourceLevel, t)}
                     </span>
                   </p>
                 </div>
@@ -262,7 +296,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
               {/* Feature policy reference */}
               {feature.featurePolicyId && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Linked policy:{' '}
+                  {t('deviceEffectiveConfig.linkedPolicy')}{' '}
                   <span className="font-mono text-xs">{feature.featurePolicyId.slice(0, 8)}...</span>
                 </p>
               )}
@@ -272,7 +306,6 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
 
         {/* Unconfigured feature placeholders */}
         {unconfiguredTypes.map((ft) => {
-          const meta = FEATURE_META[ft];
           return (
             <div
               key={ft}
@@ -280,11 +313,11 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
             >
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  {meta.icon}
+                  {FEATURE_ICONS[ft]}
                 </div>
                 <div>
-                  <h4 className="font-semibold text-muted-foreground">{meta.label}</h4>
-                  <p className="mt-0.5 text-xs text-muted-foreground">No policy assigned</p>
+                  <h4 className="font-semibold text-muted-foreground">{featureLabel(ft, t)}</h4>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('deviceEffectiveConfig.noPolicyAssigned')}</p>
                 </div>
               </div>
             </div>
@@ -295,19 +328,18 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
       {/* Inheritance chain */}
       {inheritanceChain.length > 0 && (
         <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <h4 className="font-semibold mb-3">Inheritance Chain</h4>
+          <h4 className="font-semibold mb-3">{t('deviceEffectiveConfig.inheritanceTitle')}</h4>
           <p className="text-xs text-muted-foreground mb-4">
-            Policies are resolved using closest-wins priority. More specific assignments (device level)
-            override broader ones (organization level).
+            {t('deviceEffectiveConfig.inheritanceDescription')}
           </p>
           <div className="overflow-hidden rounded-md border">
             <table className="min-w-full divide-y">
               <thead className="bg-muted/40">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Level</th>
-                  <th className="px-4 py-3">Policy</th>
-                  <th className="px-4 py-3">Features</th>
+                  <th className="px-4 py-3">{t('deviceEffectiveConfig.table.priority')}</th>
+                  <th className="px-4 py-3">{t('deviceEffectiveConfig.table.level')}</th>
+                  <th className="px-4 py-3">{t('deviceEffectiveConfig.table.policy')}</th>
+                  <th className="px-4 py-3">{t('deviceEffectiveConfig.table.features')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -316,7 +348,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
                     <td className="px-4 py-3 text-muted-foreground">{entry.priority}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-medium capitalize">
-                        {LEVEL_LABELS[entry.level]}
+                        {levelLabel(entry.level, t)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -334,7 +366,7 @@ export default function DeviceEffectiveConfigTab({ deviceId }: DeviceEffectiveCo
                             key={ft}
                             className="inline-flex items-center rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
                           >
-                            {FEATURE_META[ft]?.label ?? ft}
+                            {featureLabel(ft, t)}
                           </span>
                         ))}
                       </div>
