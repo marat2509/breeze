@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ShieldCheck, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { formatDate as formatLocalizedDate, formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 
 type WarrantyEntitlement = {
   provider: string;
@@ -29,44 +32,34 @@ type DeviceWarrantyCardProps = {
   compact?: boolean;
 };
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  active: { label: 'Active', color: 'bg-success/15 text-success border-success/30' },
-  expiring: { label: 'Expiring', color: 'bg-warning/15 text-warning border-warning/30' },
-  expired: { label: 'Expired', color: 'bg-destructive/15 text-destructive border-destructive/30' },
-  unknown: { label: 'Unknown', color: 'bg-muted text-muted-foreground border-border' },
+const statusColors: Record<string, string> = {
+  active: 'bg-success/15 text-success border-success/30',
+  expiring: 'bg-warning/15 text-warning border-warning/30',
+  expired: 'bg-destructive/15 text-destructive border-destructive/30',
+  unknown: 'bg-muted text-muted-foreground border-border',
 };
 
-function formatDate(dateStr: string | null): string {
+function formatWarrantyDate(dateStr: string | null, locale: Locale): string {
   if (!dateStr) return '\u2014';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatLocalizedDate(dateStr, locale, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function dataSourceLabel(source: string | null): string {
+function dataSourceLabel(source: string | null, t: (key: string) => string): string {
   if (!source) return '';
   switch (source) {
-    case 'agent_plist': return 'Agent (macOS plist)';
-    case 'provider': return 'Vendor API';
+    case 'agent_plist': return t('deviceWarranty.dataSources.agentPlist');
+    case 'provider': return t('deviceWarranty.dataSources.provider');
     default: return source;
   }
 }
 
-function timeAgo(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  const diffMs = Date.now() - d.getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function formatLastSync(dateStr: string | null, locale: Locale, t: (key: string) => string): string {
+  if (!dateStr) return t('deviceWarranty.never');
+  return formatRelativeTime(dateStr, locale);
 }
 
 export default function DeviceWarrantyCard({ deviceId, compact = false }: DeviceWarrantyCardProps) {
+  const { locale, t } = useI18n();
   const [warranty, setWarranty] = useState<WarrantyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -118,16 +111,18 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
         <div className="rounded-lg border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4" />
-            Warranty
+            {t('deviceWarranty.compactTitle')}
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">No warranty information</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('deviceWarranty.noInfo')}</p>
         </div>
       );
     }
     return null;
   }
 
-  const cfg = statusConfig[warranty.status] ?? statusConfig.unknown;
+  const statusKey = statusColors[warranty.status] ? warranty.status : 'unknown';
+  const statusColor = statusColors[statusKey] ?? statusColors.unknown;
+  const statusLabel = t(`deviceWarranty.status.${statusKey}`);
   const primaryEntitlement = warranty.entitlements?.[0];
 
   if (compact) {
@@ -136,20 +131,20 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4" />
-            Warranty
+            {t('deviceWarranty.compactTitle')}
           </div>
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cfg.color}`}>
-            {cfg.label}
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor}`}>
+            {statusLabel}
           </span>
         </div>
         <p className="mt-2 text-sm font-medium">
           {primaryEntitlement
             ? `${warranty.manufacturer?.toUpperCase()} ${primaryEntitlement.serviceLevelDescription}`
-            : warranty.manufacturer?.toUpperCase() ?? 'Unknown'}
+            : warranty.manufacturer?.toUpperCase() ?? t('deviceWarranty.unknown')}
         </p>
         {warranty.warrantyEndDate && (
           <p className="text-xs text-muted-foreground">
-            Expires {formatDate(warranty.warrantyEndDate)}
+            {t('deviceWarranty.expires', { date: formatWarrantyDate(warranty.warrantyEndDate, locale) })}
           </p>
         )}
       </div>
@@ -162,9 +157,9 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Warranty Information</h3>
-          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.color}`}>
-            {cfg.label}
+          <h3 className="text-lg font-semibold">{t('deviceWarranty.title')}</h3>
+          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusColor}`}>
+            {statusLabel}
           </span>
         </div>
         <button
@@ -174,26 +169,26 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
           className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing...' : 'Refresh'}
+          {refreshing ? t('deviceWarranty.refreshing') : t('deviceWarranty.refresh')}
         </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
         <div>
-          <p className="text-xs text-muted-foreground">Manufacturer</p>
+          <p className="text-xs text-muted-foreground">{t('deviceWarranty.manufacturer')}</p>
           <p className="text-sm font-medium">{warranty.manufacturer?.toUpperCase() ?? '\u2014'}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Serial Number</p>
+          <p className="text-xs text-muted-foreground">{t('deviceWarranty.serialNumber')}</p>
           <p className="text-sm font-medium font-mono">{warranty.serialNumber ?? '\u2014'}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Start Date</p>
-          <p className="text-sm font-medium">{formatDate(warranty.warrantyStartDate)}</p>
+          <p className="text-xs text-muted-foreground">{t('deviceWarranty.startDate')}</p>
+          <p className="text-sm font-medium">{formatWarrantyDate(warranty.warrantyStartDate, locale)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">End Date</p>
-          <p className="text-sm font-medium">{formatDate(warranty.warrantyEndDate)}</p>
+          <p className="text-xs text-muted-foreground">{t('deviceWarranty.endDate')}</p>
+          <p className="text-sm font-medium">{formatWarrantyDate(warranty.warrantyEndDate, locale)}</p>
         </div>
       </div>
 
@@ -202,10 +197,10 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2">Service Level</th>
-                <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Start Date</th>
-                <th className="px-4 py-2">End Date</th>
+                <th className="px-4 py-2">{t('deviceWarranty.serviceLevel')}</th>
+                <th className="px-4 py-2">{t('deviceWarranty.type')}</th>
+                <th className="px-4 py-2">{t('deviceWarranty.startDate')}</th>
+                <th className="px-4 py-2">{t('deviceWarranty.endDate')}</th>
               </tr>
             </thead>
             <tbody>
@@ -213,8 +208,8 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
                 <tr key={i} className="border-b last:border-0">
                   <td className="px-4 py-2">{e.serviceLevelDescription}</td>
                   <td className="px-4 py-2">{e.entitlementType}</td>
-                  <td className="px-4 py-2">{formatDate(e.startDate)}</td>
-                  <td className="px-4 py-2">{formatDate(e.endDate)}</td>
+                  <td className="px-4 py-2">{formatWarrantyDate(e.startDate, locale)}</td>
+                  <td className="px-4 py-2">{formatWarrantyDate(e.endDate, locale)}</td>
                 </tr>
               ))}
             </tbody>
@@ -223,16 +218,16 @@ export default function DeviceWarrantyCard({ deviceId, compact = false }: Device
       )}
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span>Last checked: {timeAgo(warranty.lastSyncAt)}</span>
+        <span>{t('deviceWarranty.lastChecked', { value: formatLastSync(warranty.lastSyncAt, locale, t) })}</span>
         {warranty.dataSource && (
-          <span>Source: {dataSourceLabel(warranty.dataSource)}</span>
+          <span>{t('deviceWarranty.source', { value: dataSourceLabel(warranty.dataSource, t) })}</span>
         )}
         {/* Legacy: pre-v0.13.9 syncs stored "No configured provider..." as lastSyncError.
             Post-v0.13.9, lastSyncError is null for no-provider cases. Remove after re-sync cycle. */}
         {warranty.lastSyncError && (
           warranty.lastSyncError.includes('No configured provider')
-            ? <span className="text-muted-foreground">Warranty lookup not available for this manufacturer</span>
-            : <span className="text-red-500">Error: {warranty.lastSyncError}</span>
+            ? <span className="text-muted-foreground">{t('deviceWarranty.lookupUnavailable')}</span>
+            : <span className="text-red-500">{t('deviceWarranty.error', { message: warranty.lastSyncError })}</span>
         )}
       </div>
     </div>
