@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 import DeviceList, { type Device } from './DeviceList';
 
@@ -29,6 +29,40 @@ const baseDevice: Device = {
   agentVersion: '0.67.0',
   tags: [],
 };
+
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
+beforeEach(() => {
+  Object.defineProperty(window, 'localStorage', {
+    value: makeMemoryStorage(),
+    writable: true,
+    configurable: true,
+  });
+  window.localStorage.clear();
+  document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
+});
 
 describe('DeviceList — agent-silent (watchdog OK) badge (#800 web-UI gap)', () => {
   it('renders the amber badge when mainAgentSilentSince is set AND watchdog is reporting', () => {
@@ -91,5 +125,19 @@ describe('DeviceList — agent-silent (watchdog OK) badge (#800 web-UI gap)', ()
     const badge = screen.getByTestId(`device-${device.id}-agent-silent-badge`);
     // 2h should render as "2h"
     expect(badge.textContent).toMatch(/2h/);
+  });
+});
+
+describe('DeviceList i18n', () => {
+  it('renders the dense table controls in Russian', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+
+    render(<DeviceList devices={[baseDevice]} />);
+
+    expect(await screen.findByText('1 из 1 устройств')).toBeDefined();
+    expect(screen.getByPlaceholderText('Поиск по hostname')).toBeDefined();
+    expect(screen.getByText('Все статусы')).toBeDefined();
+    expect(screen.getByText('Организация')).toBeDefined();
+    expect(screen.getByText('Последний раз в сети')).toBeDefined();
   });
 });

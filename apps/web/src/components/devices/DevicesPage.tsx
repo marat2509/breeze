@@ -18,6 +18,7 @@ import { navigateTo } from '@/lib/navigation';
 import { getErrorMessage, getErrorTitle } from '@/lib/errorMessages';
 import { asRecord, toPercent } from '@/lib/deviceUtils';
 import ProgressBar from '../shared/ProgressBar';
+import { useI18n } from '@/i18n/react';
 
 type ViewMode = 'list' | 'grid';
 
@@ -40,6 +41,7 @@ type DeviceGroup = {
 };
 
 export default function DevicesPage() {
+  const { t } = useI18n();
   const [devices, setDevices] = useState<Device[]>([]);
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -80,8 +82,10 @@ export default function DevicesPage() {
     scriptTargetDevices.length === 1
       ? scriptTargetDevices[0].hostname
       : scriptTargetDevices.length > 1
-        ? `${scriptTargetDevices.length} devices`
-        : 'selected devices';
+        ? t('devices.page.devicesCount', { count: scriptTargetDevices.length })
+        : t('devices.page.selectedDevices');
+
+  const commandLabel = (action: string) => t(`devices.commands.${action}`, undefined, action);
 
   const scriptTargetOs = useMemo(() => {
     const unique = [...new Set(scriptTargetDevices.map(d => d.os))];
@@ -114,9 +118,7 @@ export default function DevicesPage() {
           onTruncated: ({ actualCount }) => {
             showToast({
               type: 'error',
-              message:
-                `Devices list truncated at ${actualCount} rows ` +
-                `(safety cap hit). Some devices may not be shown — refresh or contact support.`,
+              message: t('devices.page.truncated', { count: actualCount }),
               duration: 8000
             });
           }
@@ -141,7 +143,7 @@ export default function DevicesPage() {
 
         return {
           id: d.id as string,
-          hostname: (d.hostname ?? d.displayName ?? 'Unknown') as string,
+          hostname: (d.hostname ?? d.displayName ?? t('devices.page.unknownDevice')) as string,
           os: (d.osType ?? d.os ?? 'windows') as OSType,
           osVersion: (d.osVersion ?? '') as string,
           status: (d.status ?? 'offline') as DeviceStatus,
@@ -186,8 +188,8 @@ export default function DevicesPage() {
       // Assign org and site names to devices
       const devicesWithNames = transformedDevices.map(device => ({
         ...device,
-        orgName: orgMap.get(device.orgId) ?? 'Unknown Org',
-        siteName: siteMap.get(device.siteId) ?? 'Unknown Site'
+        orgName: orgMap.get(device.orgId) ?? t('devices.page.unknownOrg'),
+        siteName: siteMap.get(device.siteId) ?? t('devices.page.unknownSite')
       }));
 
       // Fetch groups for group filter
@@ -224,7 +226,7 @@ export default function DevicesPage() {
       // brief flicker if the component remounts on the same key.
       if (!signal?.aborted) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -280,7 +282,7 @@ export default function DevicesPage() {
 
   const openScriptPicker = (targetDevices: Device[]) => {
     if (targetDevices.length === 0) {
-      showToast({ type: 'error', message: 'Select at least one device to run a script' });
+      showToast({ type: 'error', message: t('devices.page.selectScriptTarget') });
       return;
     }
     setScriptTargetDevices(targetDevices);
@@ -301,14 +303,20 @@ export default function DevicesPage() {
       const result = await executeScript(script.id, deviceIds, parameters, runAs);
 
       if (scriptTargetDevices.length === 1) {
-        showToast({ type: 'success', message: `Script "${script.name}" queued for ${scriptTargetDevices[0].hostname}` });
+        showToast({
+          type: 'success',
+          message: t('devices.page.scriptQueuedOne', { name: script.name, hostname: scriptTargetDevices[0].hostname }),
+        });
       } else {
-        showToast({ type: 'success', message: `Script "${script.name}" queued for ${result.devicesTargeted} devices` });
+        showToast({
+          type: 'success',
+          message: t('devices.page.scriptQueuedMany', { name: script.name, count: result.devicesTargeted }),
+        });
       }
 
       closeScriptPicker();
     } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to queue script' });
+      showToast({ type: 'error', message: err instanceof Error ? err.message : t('devices.page.scriptQueueFailed') });
     } finally {
       setActionInProgress(false);
     }
@@ -326,8 +334,10 @@ export default function DevicesPage() {
         case 'shutdown':
         case 'lock': {
           await sendDeviceCommand(device.id, action);
-          const label = action === 'reboot_safe_mode' ? 'Reboot to Safe Mode' : action.charAt(0).toUpperCase() + action.slice(1);
-          showToast({ type: 'success', message: `${label} command sent to ${device.hostname}` });
+          showToast({
+            type: 'success',
+            message: t('devices.page.commandSent', { command: commandLabel(action), hostname: device.hostname }),
+          });
           break;
         }
 
@@ -337,19 +347,19 @@ export default function DevicesPage() {
             const hostname = device.hostname;
             showToast({
               type: 'success',
-              message: `Wake packet sent to ${hostname} via ${wake.relay.hostname} (${wake.broadcast}). Watching for it to come online…`,
+              message: t('devices.page.wakeSent', { hostname, relay: wake.relay.hostname, broadcast: wake.broadcast }),
             });
             const wakeController = new AbortController();
             wakeWatchersRef.current.add(wakeController);
             void watchWakeOutcome(device.id, { signal: wakeController.signal })
               .then(async (outcome) => {
                 if (outcome === 'online') {
-                  showToast({ type: 'success', message: `${hostname} is now online.` });
+                  showToast({ type: 'success', message: t('devices.page.wakeOnline', { hostname }) });
                   await fetchDevices();
                 } else if (outcome === 'timeout') {
                   showToast({
                     type: 'error',
-                    message: `${hostname} did not come online within 4 minutes. Check ethernet + BIOS WoL.`,
+                    message: t('devices.page.wakeTimeout', { hostname }),
                   });
                 }
                 // 'aborted' is silent — user navigated away or page reloaded.
@@ -372,7 +382,7 @@ export default function DevicesPage() {
           await sendDeviceCommand(device.id, 'refresh_inventory');
           showToast({
             type: 'success',
-            message: `Inventory refresh requested for ${device.hostname}. Fresh data in 1–2 minutes.`,
+            message: t('devices.page.refreshRequested', { hostname: device.hostname }),
           });
           break;
         }
@@ -380,7 +390,13 @@ export default function DevicesPage() {
         case 'maintenance':
           const isCurrentlyMaintenance = device.status === 'maintenance';
           await toggleMaintenanceMode(device.id, !isCurrentlyMaintenance);
-          showToast({ type: 'success', message: `${device.hostname} ${isCurrentlyMaintenance ? 'taken out of' : 'put into'} maintenance mode` });
+          showToast({
+            type: 'success',
+            message: t('devices.page.maintenanceChanged', {
+              hostname: device.hostname,
+              state: t(isCurrentlyMaintenance ? 'devices.page.maintenanceOffState' : 'devices.page.maintenanceOnState'),
+            }),
+          });
           await fetchDevices();
           break;
 
@@ -409,21 +425,21 @@ export default function DevicesPage() {
           let cancelled = false;
           showToast({
             type: 'undo',
-            message: `Decommissioning "${device.hostname}"...`,
+            message: t('devices.page.decommissioning', { hostname: device.hostname }),
             duration: 5000,
             onUndo: () => {
               cancelled = true;
-              showToast({ type: 'success', message: 'Decommission cancelled', duration: 2000 });
+              showToast({ type: 'success', message: t('devices.page.decommissionCancelled'), duration: 2000 });
             }
           });
           setTimeout(async () => {
             if (cancelled) return;
             try {
               await decommissionDevice(device.id);
-              showToast({ type: 'success', message: `${device.hostname} has been decommissioned` });
+              showToast({ type: 'success', message: t('devices.page.decommissioned', { hostname: device.hostname }) });
               await fetchDevices();
             } catch (err) {
-              showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to decommission ${device.hostname}` });
+              showToast({ type: 'error', message: err instanceof Error ? err.message : t('devices.page.decommissionFailed', { hostname: device.hostname }) });
             }
           }, 5000);
           break;
@@ -431,7 +447,7 @@ export default function DevicesPage() {
 
         case 'restore':
           await restoreDevice(device.id);
-          showToast({ type: 'success', message: `${device.hostname} has been restored` });
+          showToast({ type: 'success', message: t('devices.page.restored', { hostname: device.hostname }) });
           await fetchDevices();
           break;
 
@@ -440,31 +456,31 @@ export default function DevicesPage() {
           let pdCancelled = false;
           showToast({
             type: 'undo',
-            message: `Permanently deleting "${device.hostname}"...`,
+            message: t('devices.page.permanentDeleting', { hostname: device.hostname }),
             duration: 5000,
             onUndo: () => {
               pdCancelled = true;
-              showToast({ type: 'success', message: 'Permanent delete cancelled', duration: 2000 });
+              showToast({ type: 'success', message: t('devices.page.permanentDeleteCancelled'), duration: 2000 });
             }
           });
           setTimeout(async () => {
             if (pdCancelled) return;
             try {
               await permanentDeleteDevice(device.id);
-              showToast({ type: 'success', message: `${device.hostname} has been permanently deleted` });
+              showToast({ type: 'success', message: t('devices.page.permanentDeleted', { hostname: device.hostname }) });
               await fetchDevices();
             } catch (err) {
-              showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to delete ${device.hostname}` });
+              showToast({ type: 'error', message: err instanceof Error ? err.message : t('devices.page.permanentDeleteFailed', { hostname: device.hostname }) });
             }
           }, 5000);
           break;
         }
 
         default:
-          showToast({ type: 'error', message: `Unknown action: ${action}` });
+          showToast({ type: 'error', message: t('devices.page.unknownAction', { action }) });
       }
     } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to ${action} ${device.hostname}` });
+      showToast({ type: 'error', message: err instanceof Error ? err.message : t('devices.page.actionFailed', { action, hostname: device.hostname }) });
     } finally {
       setActionInProgress(false);
     }
@@ -498,26 +514,32 @@ export default function DevicesPage() {
           const successCount = result.commands?.length ?? 0;
           const failedCount = result.failed?.length ?? 0;
           const skippedCount = result.skipped?.length ?? 0;
-          const bulkLabel = action === 'reboot_safe_mode' ? 'Reboot to Safe Mode' : action.charAt(0).toUpperCase() + action.slice(1);
-          const skippedTail = skippedCount > 0 ? `, ${skippedCount} already pending` : '';
+          const bulkLabel = commandLabel(action);
+          const skippedTail = skippedCount > 0 ? t('devices.page.alreadyPendingTail', { count: skippedCount }) : '';
 
           if (failedCount === 0) {
             showToast({
               type: 'success',
-              message: `${bulkLabel} command sent to ${successCount} device${successCount === 1 ? '' : 's'}${skippedTail}`,
+              message: t('devices.page.bulkCommandSent', { command: bulkLabel, count: successCount, tail: skippedTail }),
             });
           } else {
             const failureSummary = summarizeBulkCommandFailures(result.failed ?? []);
             showToast({
               type: 'error',
-              message: `${bulkLabel} sent to ${successCount} device${successCount === 1 ? '' : 's'}${skippedTail}; ${failedCount} failed: ${failureSummary}.`,
+              message: t('devices.page.bulkCommandFailed', {
+                command: bulkLabel,
+                success: successCount,
+                failed: failedCount,
+                summary: failureSummary,
+                tail: skippedTail,
+              }),
             });
           }
           break;
         }
 
         case 'maintenance-on': {
-          const mOnLabel = 'Enabling maintenance mode';
+          const mOnLabel = t('devices.page.maintenanceEnabling');
           setBulkProgress({ current: 0, total: deviceCount, label: mOnLabel });
           let mOnDone = 0;
           for (const device of selectedDevices) {
@@ -526,13 +548,13 @@ export default function DevicesPage() {
             setBulkProgress({ current: mOnDone, total: deviceCount, label: mOnLabel });
           }
           setBulkProgress(null);
-          showToast({ type: 'success', message: `${deviceCount} devices put into maintenance mode` });
+          showToast({ type: 'success', message: t('devices.page.maintenanceBulkOn', { count: deviceCount }) });
           await fetchDevices();
           break;
         }
 
         case 'maintenance-off': {
-          const mOffLabel = 'Disabling maintenance mode';
+          const mOffLabel = t('devices.page.maintenanceDisabling');
           setBulkProgress({ current: 0, total: deviceCount, label: mOffLabel });
           let mOffDone = 0;
           for (const device of selectedDevices) {
@@ -541,7 +563,7 @@ export default function DevicesPage() {
             setBulkProgress({ current: mOffDone, total: deviceCount, label: mOffLabel });
           }
           setBulkProgress(null);
-          showToast({ type: 'success', message: `${deviceCount} devices taken out of maintenance mode` });
+          showToast({ type: 'success', message: t('devices.page.maintenanceBulkOff', { count: deviceCount }) });
           await fetchDevices();
           break;
         }
@@ -549,9 +571,12 @@ export default function DevicesPage() {
         case 'decommission': {
           const result = await bulkDecommissionDevices(deviceIds);
           if (result.failed === 0) {
-            showToast({ type: 'success', message: `${result.succeeded} devices decommissioned` });
+            showToast({ type: 'success', message: t('devices.page.bulkDecommissioned', { count: result.succeeded }) });
           } else {
-            showToast({ type: 'error', message: `${result.succeeded} decommissioned, ${result.failed} failed` });
+            showToast({
+              type: 'error',
+              message: t('devices.page.bulkDecommissionPartial', { succeeded: result.succeeded, failed: result.failed }),
+            });
           }
           await fetchDevices();
           break;
@@ -567,27 +592,32 @@ export default function DevicesPage() {
           if (summary.failed.length === 0) {
             showToast({
               type: 'success',
-              message: `Wake packets sent to ${summary.succeeded.length} device${summary.succeeded.length === 1 ? '' : 's'}. Allow up to 5 minutes to come online.`,
+              message: t('devices.page.bulkWakeSuccess', { count: summary.succeeded.length }),
             });
           } else if (summary.succeeded.length === 0) {
             showToast({
               type: 'error',
-              message: `Could not wake any of ${summary.failed.length} device${summary.failed.length === 1 ? '' : 's'}: ${failureSummary}.`,
+              message: t('devices.page.bulkWakeNone', { count: summary.failed.length, summary: failureSummary }),
             });
           } else {
             showToast({
               type: 'error',
-              message: `Wake sent to ${summary.succeeded.length} of ${summary.succeeded.length + summary.failed.length} devices. ${summary.failed.length} could not be woken: ${failureSummary}.`,
+              message: t('devices.page.bulkWakePartial', {
+                succeeded: summary.succeeded.length,
+                failed: summary.failed.length,
+                total: summary.succeeded.length + summary.failed.length,
+                summary: failureSummary,
+              }),
             });
           }
           break;
         }
 
         default:
-          showToast({ type: 'error', message: `Unknown bulk action: ${action}` });
+          showToast({ type: 'error', message: t('devices.page.unknownBulkAction', { action }) });
       }
     } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed bulk ${action}` });
+      showToast({ type: 'error', message: err instanceof Error ? err.message : t('devices.page.bulkActionFailed', { action }) });
     } finally {
       setActionInProgress(false);
     }
@@ -643,7 +673,7 @@ export default function DevicesPage() {
             onClick={() => void fetchDevices()}
             className="text-xs font-medium text-primary hover:underline"
           >
-            Try again
+            {t('devices.page.tryAgain')}
           </button>
         </div>
       </div>
@@ -654,9 +684,9 @@ export default function DevicesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Devices</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('devices.page.title')}</h1>
           <p className="text-muted-foreground">
-            Manage and monitor your fleet.
+            {t('devices.page.description')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -667,8 +697,8 @@ export default function DevicesPage() {
               className={`flex h-10 w-10 items-center justify-center rounded-l-md transition ${
                 viewMode === 'list' ? 'bg-muted' : 'hover:bg-muted/50'
               }`}
-              title="List view"
-              aria-label="List view"
+              title={t('devices.page.listView')}
+              aria-label={t('devices.page.listView')}
             >
               <List className="h-4 w-4" />
             </button>
@@ -678,8 +708,8 @@ export default function DevicesPage() {
               className={`flex h-10 w-10 items-center justify-center rounded-r-md transition ${
                 viewMode === 'grid' ? 'bg-muted' : 'hover:bg-muted/50'
               }`}
-              title="Grid view"
-              aria-label="Grid view"
+              title={t('devices.page.gridView')}
+              aria-label={t('devices.page.gridView')}
             >
               <Grid className="h-4 w-4" />
             </button>
@@ -690,7 +720,7 @@ export default function DevicesPage() {
             className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
             <Plus className="h-4 w-4" />
-            Add Device
+            {t('devices.page.addDevice')}
           </button>
         </div>
       </div>
@@ -715,9 +745,9 @@ export default function DevicesPage() {
       {devices.length === 0 ? (
         <div className="rounded-lg border bg-card p-8">
           <div className="max-w-lg">
-            <h2 className="text-lg font-semibold text-foreground mb-2">Your fleet is empty</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">{t('devices.page.emptyTitle')}</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Get started by adding your first device. The installer and enrollment key are generated automatically.
+              {t('devices.page.emptyDescription')}
             </p>
             <div className="flex gap-3">
               <button
@@ -726,10 +756,10 @@ export default function DevicesPage() {
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 <Plus className="h-4 w-4" />
-                Add Device
+                {t('devices.page.addDevice')}
               </button>
               <a href="https://docs.breezermm.com/agents/installation/" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors">
-                View installation guide
+                {t('devices.page.installationGuide')}
               </a>
             </div>
           </div>

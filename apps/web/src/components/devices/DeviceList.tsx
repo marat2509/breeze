@@ -11,6 +11,7 @@ import {
   readPageSizePreference,
   writePageSizePreference,
 } from './pageSizePreference';
+import { useI18n } from '@/i18n/react';
 
 export type DeviceStatus = 'online' | 'offline' | 'maintenance' | 'decommissioned' | 'quarantined' | 'updating' | 'pending';
 export type OSType = 'windows' | 'macos' | 'linux';
@@ -142,6 +143,7 @@ export default function DeviceList({
   pageSize = 10,
   serverFilter = null
 }: DeviceListProps) {
+  const { t } = useI18n();
   // Use provided timezone or browser default
   const effectiveTimezone = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -371,17 +373,23 @@ export default function DeviceList({
 
   const allSelected = paginatedDevices.length > 0 && paginatedDevices.every(d => selectedIds.has(d.id));
   const someSelected = paginatedDevices.some(d => selectedIds.has(d.id));
+  const statusLabel = (status: DeviceStatus) => t(`devices.status.${status}`, undefined, statusLabels[status]);
+  const roleLabel = (role: string) => t(`devices.roles.${role}`, undefined, getDeviceRoleLabel(role));
+  const osLabel = (os: OSType) => t(`devices.osNames.${os}`, undefined, osLabels[os]);
 
   return (
     <div>
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
-            {filteredDevices.length} of {statusFilter === 'all' ? devices.filter(d => d.status !== 'decommissioned').length : devices.length} devices
+            {t('devices.list.summary', {
+              filtered: filteredDevices.length,
+              total: statusFilter === 'all' ? devices.filter(d => d.status !== 'decommissioned').length : devices.length,
+            })}
             {serverFilterIds !== null && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                 <Filter className="h-3 w-3" />
-                Advanced filter active
+                {t('devices.list.advancedFilterActive')}
                 {serverFilterLoading && <span className="ml-1 animate-pulse">...</span>}
               </span>
             )}
@@ -391,7 +399,7 @@ export default function DeviceList({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="search"
-                placeholder="Search by hostname"
+                placeholder={t('devices.list.searchPlaceholder')}
                 value={query}
                 onChange={event => {
                   setQuery(event.target.value);
@@ -402,32 +410,32 @@ export default function DeviceList({
             </div>
             <select
               value={statusFilter}
-              aria-label="Filter by status"
+              aria-label={t('devices.list.filterByStatus')}
               onChange={event => {
                 setStatusFilter(event.target.value);
                 setCurrentPage(1);
               }}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-32"
             >
-              <option value="all">All Status</option>
-              <option value="online">Online</option>
-              <option value="offline">Offline</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="decommissioned">Decommissioned</option>
+              <option value="all">{t('devices.list.allStatus')}</option>
+              <option value="online">{statusLabel('online')}</option>
+              <option value="offline">{statusLabel('offline')}</option>
+              <option value="maintenance">{statusLabel('maintenance')}</option>
+              <option value="decommissioned">{statusLabel('decommissioned')}</option>
             </select>
             <select
               value={osFilter}
-              aria-label="Filter by operating system"
+              aria-label={t('devices.list.filterByOs')}
               onChange={event => {
                 setOsFilter(event.target.value);
                 setCurrentPage(1);
               }}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-32"
             >
-              <option value="all">All OS</option>
-              <option value="windows">Windows</option>
-              <option value="macos">macOS</option>
-              <option value="linux">Linux</option>
+              <option value="all">{t('devices.list.allOs')}</option>
+              <option value="windows">{osLabel('windows')}</option>
+              <option value="macos">{osLabel('macos')}</option>
+              <option value="linux">{osLabel('linux')}</option>
             </select>
             <button
               type="button"
@@ -435,7 +443,7 @@ export default function DeviceList({
               className="h-10 whitespace-nowrap rounded-md border px-3 text-sm font-medium hover:bg-muted flex items-center gap-1.5"
             >
               <Filter className="h-3.5 w-3.5" />
-              More
+              {t('devices.list.more')}
               {moreFiltersCount > 0 && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                   {moreFiltersCount}
@@ -456,8 +464,8 @@ export default function DeviceList({
                   setCurrentPage(1);
                 }}
                 className="h-10 whitespace-nowrap rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                Clear filters
+            >
+                {t('devices.list.clearFilters')}
               </button>
             )}
           </div>
@@ -467,31 +475,31 @@ export default function DeviceList({
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <select
                 value={roleFilter}
-                aria-label="Filter by device role"
+                aria-label={t('devices.list.filterByRole')}
                 onChange={event => {
                   setRoleFilter(event.target.value);
                   setCurrentPage(1);
                 }}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
               >
-                <option value="all">All Roles</option>
+                <option value="all">{t('devices.list.allRoles')}</option>
                 {DEVICE_ROLES.map(role => (
                   <option key={role} value={role}>
-                    {getDeviceRoleLabel(role)}
+                    {roleLabel(role)}
                   </option>
                 ))}
               </select>
               {orgs.length > 0 && (
                 <select
                   value={orgFilter}
-                  aria-label="Filter by organization"
+                  aria-label={t('devices.list.filterByOrganization')}
                   onChange={event => {
                     setOrgFilter(event.target.value);
                     setCurrentPage(1);
                   }}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-40"
                 >
-                  <option value="all">All Orgs</option>
+                  <option value="all">{t('devices.list.allOrgs')}</option>
                   {orgs.map(org => (
                     <option key={org.id} value={org.id}>
                       {org.name}
@@ -502,14 +510,14 @@ export default function DeviceList({
               {sites.length > 0 && (
                 <select
                   value={siteFilter}
-                  aria-label="Filter by site"
+                  aria-label={t('devices.list.filterBySite')}
                   onChange={event => {
                     setSiteFilter(event.target.value);
                     setCurrentPage(1);
                   }}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-40"
                 >
-                  <option value="all">All Sites</option>
+                  <option value="all">{t('devices.list.allSites')}</option>
                   {sites.map(site => (
                     <option key={site.id} value={site.id}>
                       {site.name}
@@ -524,7 +532,7 @@ export default function DeviceList({
                     onClick={() => setGroupDropdownOpen(!groupDropdownOpen)}
                     className="h-10 whitespace-nowrap rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted flex items-center gap-1.5"
                   >
-                    Groups
+                    {t('devices.list.groups')}
                     {groupFilter.length > 0 && (
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                         {groupFilter.length}
@@ -551,7 +559,9 @@ export default function DeviceList({
                               className="h-4 w-4 rounded border-border"
                             />
                             <span className="text-sm truncate">{group.name}</span>
-                            <span className="ml-auto text-[10px] text-muted-foreground">{group.type}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground">
+                              {t(`devices.groupTypes.${group.type}`, undefined, group.type)}
+                            </span>
                           </label>
                         ))}
                       </div>
@@ -564,13 +574,13 @@ export default function DeviceList({
                           }}
                           className="text-xs font-medium text-primary hover:underline"
                         >
-                          + New Group
+                          {t('devices.list.newGroup')}
                         </button>
                         <a
                           href="/devices/groups"
                           className="text-xs text-muted-foreground hover:text-foreground ml-auto"
                         >
-                          Manage Groups
+                          {t('devices.list.manageGroups')}
                         </a>
                       </div>
                     </div>
@@ -584,14 +594,14 @@ export default function DeviceList({
 
       {selectedIds.size > 0 && (
         <div className="mt-4 flex items-center gap-3 rounded-md border bg-muted/40 px-4 py-2">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <span className="text-sm font-medium">{t('devices.list.selected', { count: selectedIds.size })}</span>
           <div className="relative">
             <button
               type="button"
               onClick={() => setBulkMenuOpen(!bulkMenuOpen)}
               className="flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted"
             >
-              Bulk Actions
+              {t('devices.list.bulkActions')}
               <MoreHorizontal className="h-4 w-4" />
             </button>
             {bulkMenuOpen && (
@@ -601,35 +611,35 @@ export default function DeviceList({
                   onClick={() => handleBulkAction('reboot')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Reboot Selected
+                  {t('devices.list.rebootSelected')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBulkAction('run-script')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Run Script
+                  {t('devices.list.runScript')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBulkAction('deploy-software')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Deploy Software
+                  {t('devices.list.deploySoftware')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBulkAction('maintenance-on')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Enable Maintenance
+                  {t('devices.list.enableMaintenance')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBulkAction('maintenance-off')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Disable Maintenance
+                  {t('devices.list.disableMaintenance')}
                 </button>
                 <hr className="my-1" />
                 <button
@@ -637,7 +647,7 @@ export default function DeviceList({
                   onClick={() => handleBulkAction('wake')}
                   className="w-full px-4 py-2 text-left text-sm hover:bg-muted"
                 >
-                  Wake Selected
+                  {t('devices.list.wakeSelected')}
                 </button>
                 <hr className="my-1" />
                 <button
@@ -645,7 +655,7 @@ export default function DeviceList({
                   onClick={() => handleBulkAction('decommission')}
                   className="w-full px-4 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
                 >
-                  Decommission Selected
+                  {t('devices.list.decommissionSelected')}
                 </button>
               </div>
             )}
@@ -655,7 +665,7 @@ export default function DeviceList({
             onClick={() => setSelectedIds(new Set())}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            Clear selection
+            {t('devices.list.clearSelection')}
           </button>
         </div>
       )}
@@ -668,7 +678,7 @@ export default function DeviceList({
                 <input
                   type="checkbox"
                   checked={allSelected}
-                  aria-label="Select all devices on this page"
+                  aria-label={t('devices.list.selectAllPage')}
                   ref={el => {
                     if (el) el.indeterminate = someSelected && !allSelected;
                   }}
@@ -678,11 +688,11 @@ export default function DeviceList({
               </th>
               <th
                 className="px-3 py-3 cursor-pointer select-none hover:text-foreground"
-                title="Sort by hostname"
+                title={t('devices.list.sortByHostname')}
                 onClick={() => handleSort('hostname')}
               >
                 <span className="inline-flex items-center gap-1">
-                  Hostname
+                  {t('devices.list.hostname')}
                   {sortField === 'hostname' ? (
                     sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   ) : (
@@ -690,17 +700,17 @@ export default function DeviceList({
                   )}
                 </span>
               </th>
-              <th className="px-3 py-3">Organization</th>
-              <th className="px-3 py-3">Site</th>
-              <th className="px-3 py-3">OS</th>
-              <th className="px-3 py-3">Role</th>
+              <th className="px-3 py-3">{t('devices.list.organization')}</th>
+              <th className="px-3 py-3">{t('devices.list.site')}</th>
+              <th className="px-3 py-3">{t('devices.list.os')}</th>
+              <th className="px-3 py-3">{t('devices.list.role')}</th>
               <th
                 className="px-3 py-3 cursor-pointer select-none hover:text-foreground"
-                title="Sort by status"
+                title={t('devices.list.sortByStatus')}
                 onClick={() => handleSort('status')}
               >
                 <span className="inline-flex items-center gap-1">
-                  Status
+                  {t('devices.list.status')}
                   {sortField === 'status' ? (
                     sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   ) : (
@@ -710,11 +720,11 @@ export default function DeviceList({
               </th>
               <th
                 className="px-3 py-3 cursor-pointer select-none hover:text-foreground"
-                title="Sort by CPU usage"
+                title={t('devices.list.sortByCpu')}
                 onClick={() => handleSort('cpuPercent')}
               >
                 <span className="inline-flex items-center gap-1">
-                  CPU %
+                  {t('devices.list.cpu')}
                   {sortField === 'cpuPercent' ? (
                     sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   ) : (
@@ -724,11 +734,11 @@ export default function DeviceList({
               </th>
               <th
                 className="px-3 py-3 cursor-pointer select-none hover:text-foreground"
-                title="Sort by RAM usage"
+                title={t('devices.list.sortByRam')}
                 onClick={() => handleSort('ramPercent')}
               >
                 <span className="inline-flex items-center gap-1">
-                  RAM %
+                  {t('devices.list.ram')}
                   {sortField === 'ramPercent' ? (
                     sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   ) : (
@@ -738,11 +748,11 @@ export default function DeviceList({
               </th>
               <th
                 className="px-3 py-3 cursor-pointer select-none hover:text-foreground"
-                title="Sort by last seen time"
+                title={t('devices.list.sortByLastSeen')}
                 onClick={() => handleSort('lastSeen')}
               >
                 <span className="inline-flex items-center gap-1">
-                  Last Seen
+                  {t('devices.list.lastSeen')}
                   {sortField === 'lastSeen' ? (
                     sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   ) : (
@@ -750,14 +760,14 @@ export default function DeviceList({
                   )}
                 </span>
               </th>
-              <th className="px-3 py-3 text-right">Actions</th>
+              <th className="px-3 py-3 text-right">{t('devices.list.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {paginatedDevices.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No devices found. Try adjusting your search or filters.
+                  {t('devices.list.emptyFiltered')}
                 </td>
               </tr>
             ) : (
@@ -778,7 +788,7 @@ export default function DeviceList({
                     <input
                       type="checkbox"
                       checked={selectedIds.has(device.id)}
-                      aria-label={`Select ${device.hostname}`}
+                      aria-label={t('devices.list.selectDevice', { hostname: device.hostname })}
                       onClick={e => e.stopPropagation()}
                       onChange={e => handleSelectOne(device.id, e.target.checked)}
                       className="h-4 w-4 rounded border-border"
@@ -793,7 +803,7 @@ export default function DeviceList({
                   <td className="max-w-[160px] px-3 py-3 text-sm text-muted-foreground">
                     <span className="block truncate" title={device.siteName}>{device.siteName}</span>
                   </td>
-                  <td className="px-3 py-3 text-sm">{osLabels[device.os]}</td>
+                  <td className="px-3 py-3 text-sm">{osLabel(device.os)}</td>
                   <td className="px-3 py-3 text-sm">
                     {(() => {
                       const role = device.deviceRole ?? 'unknown';
@@ -801,7 +811,7 @@ export default function DeviceList({
                       return (
                         <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-medium">
                           <RoleIcon className="h-3 w-3" />
-                          {getDeviceRoleLabel(role)}
+                          {roleLabel(role)}
                         </span>
                       );
                     })()}
@@ -809,15 +819,15 @@ export default function DeviceList({
                   <td className="px-3 py-3 text-sm">
                     <div className="flex flex-wrap items-center gap-1">
                       <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusColors[device.status]}`}>
-                        {statusLabels[device.status]}
+                        {statusLabel(device.status)}
                       </span>
                       {shouldShowAgentSilentBadge(device) && (
                         <span
                           data-testid={`device-${device.id}-agent-silent-badge`}
-                          title={`Main agent has been silent for ${formatSilentDuration(device.mainAgentSilentSince!)}. Watchdog is still reporting in, so the box is alive but the agent has wedged.`}
+                          title={t('devices.list.agentSilentTitle', { duration: formatSilentDuration(device.mainAgentSilentSince!) })}
                           className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium bg-warning/15 text-warning border-warning/30"
                         >
-                          Agent silent · {formatSilentDuration(device.mainAgentSilentSince!)}
+                          {t('devices.list.agentSilent', { duration: formatSilentDuration(device.mainAgentSilentSince!) })}
                         </span>
                       )}
                     </div>
@@ -876,6 +886,7 @@ export default function DeviceList({
                             setRowMenuOpenId(rowMenuOpenId === device.id ? null : device.id);
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-muted"
+                          aria-label={t('devices.list.rowActions')}
                         >
                           <MoreVertical className="h-4 w-4" />
                         </button>
@@ -891,7 +902,7 @@ export default function DeviceList({
                               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Terminal className="h-4 w-4" />
-                              Remote Terminal
+                              {t('devices.list.remoteTerminal')}
                             </button>
                             <button
                               type="button"
@@ -902,7 +913,7 @@ export default function DeviceList({
                               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
                             >
                               <FileCode className="h-4 w-4" />
-                              Run Script
+                              {t('devices.list.runScript')}
                             </button>
                             <button
                               type="button"
@@ -914,7 +925,7 @@ export default function DeviceList({
                               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <RotateCcw className="h-4 w-4" />
-                              Reboot
+                              {t('devices.list.reboot')}
                             </button>
                             {device.status === 'offline' && (
                               <button
@@ -924,10 +935,10 @@ export default function DeviceList({
                                   setRowMenuOpenId(null);
                                 }}
                                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
-                                title="Send a Wake-on-LAN packet via an online peer agent on the device's LAN"
+                                title={t('devices.list.wakeTitle')}
                               >
                                 <Zap className="h-4 w-4" />
-                                Wake
+                                {t('devices.list.wake')}
                               </button>
                             )}
                             <button
@@ -939,7 +950,7 @@ export default function DeviceList({
                               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-muted"
                             >
                               <Settings className="h-4 w-4" />
-                              Settings
+                              {t('devices.list.settings')}
                             </button>
                             <hr className="my-1" />
                             {device.status === 'decommissioned' ? (
@@ -952,7 +963,7 @@ export default function DeviceList({
                                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-success hover:bg-success/10"
                               >
                                 <RotateCcw className="h-4 w-4" />
-                                Restore
+                                {t('devices.list.restore')}
                               </button>
                             ) : (
                               <button
@@ -964,7 +975,7 @@ export default function DeviceList({
                                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
                               >
                                 <Trash2 className="h-4 w-4" />
-                                Decommission
+                                {t('devices.list.decommission')}
                               </button>
                             )}
                           </div>
@@ -983,16 +994,20 @@ export default function DeviceList({
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">
-              Showing {startIndex + 1} to {Math.min(startIndex + effectivePageSize, sortedDevices.length)} of {sortedDevices.length}
+              {t('devices.list.showing', {
+                from: startIndex + 1,
+                to: Math.min(startIndex + effectivePageSize, sortedDevices.length),
+                total: sortedDevices.length,
+              })}
             </p>
             <div className="flex items-center gap-2">
               <label htmlFor="device-page-size" className="text-sm text-muted-foreground">
-                Per page
+                {t('devices.list.perPage')}
               </label>
               <select
                 id="device-page-size"
                 value={effectivePageSize}
-                aria-label="Devices per page"
+                aria-label={t('devices.list.devicesPerPage')}
                 onChange={event => handlePageSizeChange(Number(event.target.value))}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-32"
               >
@@ -1015,7 +1030,7 @@ export default function DeviceList({
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-sm">
-                Page {currentPage} of {totalPages}
+                {t('devices.list.pageOf', { page: currentPage, total: totalPages })}
               </span>
               <button
                 type="button"

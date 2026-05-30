@@ -76,6 +76,8 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/auth/AuthPage.tsx',
   'src/components/auth/LoginForm.tsx',
   'src/components/auth/LoginPage.tsx',
+  'src/components/devices/DeviceList.tsx',
+  'src/components/devices/DevicesPage.tsx',
   'src/components/auth/MFAVerifyForm.tsx',
   'src/components/layout/CommandPalette.tsx',
   'src/components/layout/Header.tsx',
@@ -104,6 +106,7 @@ const UI_TEXT_ALLOWLIST = new Set([
   'Web',
   'API',
   'Esc',
+  'Set',
   'Promise',
 ]);
 
