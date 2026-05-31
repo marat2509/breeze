@@ -20,9 +20,116 @@ const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500):
 
 const deviceId = '11111111-1111-1111-1111-111111111111';
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    }
+  };
+}
+
 describe('DevicePatchStatusTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true
+    });
+    window.localStorage.setItem('breeze_locale', 'en');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
+  });
+
+  it('renders Russian patch controls and tables when locale is Russian', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+    fetchWithAuthMock.mockResolvedValue(
+      makeJsonResponse({
+        data: {
+          compliancePercent: 80,
+          pending: [
+            {
+              id: 'p-1',
+              title: '2026-01 Cumulative Update for Windows 11 (KB5050001)',
+              source: 'microsoft',
+              category: 'security',
+              status: 'pending',
+              severity: 'important',
+              releaseDate: '2026-02-01',
+              requiresReboot: true
+            },
+            {
+              id: 'p-2',
+              title: 'Google Chrome',
+              source: 'third_party',
+              category: 'application',
+              status: 'pending',
+              severity: 'low',
+              releaseDate: '2026-01-30'
+            }
+          ],
+          installed: [
+            {
+              id: 'i-1',
+              title: 'Security Intelligence Update for Microsoft Defender',
+              source: 'microsoft',
+              category: 'definitions',
+              status: 'installed',
+              installedAt: '2026-02-01T08:30:00.000Z'
+            },
+            {
+              id: 'i-2',
+              title: 'Zoom',
+              source: 'third_party',
+              category: 'application',
+              status: 'installed',
+              installedAt: '2026-02-02T11:00:00.000Z'
+            }
+          ]
+        }
+      })
+    );
+
+    render(<DevicePatchStatusTab deviceId={deviceId} osType="windows" />);
+
+    expect(await screen.findByText('Ожидающие обновления Windows')).toBeInTheDocument();
+    expect(screen.getByText('Управление патчами')).toBeInTheDocument();
+    expect(screen.getByText('Запуск сканов и установок для этого устройства')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Обновить данные патчей' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Установить ожидающие патчи ОС (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Запустить скан патчей ОС' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Запустить скан сторонних патчей' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Установить сторонние патчи (1)' })).toBeInTheDocument();
+    expect(screen.getByText('Соответствие патчей')).toBeInTheDocument();
+    expect(screen.getByText('Ожидающие и установленные обновления')).toBeInTheDocument();
+    expect(screen.getByText('80% соответствует')).toBeInTheDocument();
+    expect(screen.getByText('2 ожидает')).toBeInTheDocument();
+    expect(screen.getByText('2 установлено')).toBeInTheDocument();
+    expect(screen.getByText('Ожидающие сторонние обновления')).toBeInTheDocument();
+    expect(screen.getByText('Установленные обновления Windows')).toBeInTheDocument();
+    expect(screen.getByText('Установленные сторонние обновления')).toBeInTheDocument();
+    expect(screen.getByText('Важный')).toBeInTheDocument();
+    expect(screen.getAllByText('Безопасность').length).toBeGreaterThan(0);
+    expect(screen.getByText('Требуется перезагрузка')).toBeInTheDocument();
+    expect(screen.getAllByText(/Выпущено/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Источник').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Категория').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Установлено').length).toBeGreaterThan(0);
   });
 
   it('renders Windows-specific patch sections for Windows devices', async () => {
