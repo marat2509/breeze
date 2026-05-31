@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ScriptsPage from './ScriptsPage';
 import { fetchWithAuth } from '../../stores/auth';
+import { LOCALE_STORAGE_KEY } from '../../i18n/locales';
 
 vi.mock('../../stores/auth', () => ({
   fetchWithAuth: vi.fn()
@@ -54,6 +55,19 @@ vi.mock('./ExecutionDetails', () => ({
 }));
 
 const fetchWithAuthMock = vi.mocked(fetchWithAuth);
+const localStorageState = new Map<string, string>();
+
+const installLocalStorage = () => {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => localStorageState.clear(),
+      getItem: (key: string) => localStorageState.get(key) ?? null,
+      removeItem: (key: string) => localStorageState.delete(key),
+      setItem: (key: string, value: string) => localStorageState.set(key, value),
+    },
+  });
+};
 
 const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500): Response =>
   ({
@@ -76,6 +90,8 @@ const baseScript = {
 describe('ScriptsPage execution freshness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installLocalStorage();
+    window.localStorage.clear();
   });
 
   it('updates lastRun from execution response timestamp when available', async () => {
@@ -156,5 +172,37 @@ describe('ScriptsPage execution freshness', () => {
 
     const scriptsCalls = fetchWithAuthMock.mock.calls.filter(([url]) => String(url) === '/scripts');
     expect(scriptsCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renders the script library shell in Russian', async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'ru');
+    fetchWithAuthMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/scripts') {
+        return makeJsonResponse({ data: [] });
+      }
+      if (url === '/devices?limit=10000') {
+        return makeJsonResponse({ data: [] });
+      }
+      if (url === '/orgs/sites') {
+        return makeJsonResponse({ data: [] });
+      }
+      if (url === '/scripts/system-library') {
+        return makeJsonResponse({ data: [] });
+      }
+      return makeJsonResponse({}, false, 404);
+    });
+
+    render(<ScriptsPage />);
+
+    expect(await screen.findByText('Библиотека скриптов')).toBeInTheDocument();
+    expect(screen.getByText('Скриптов пока нет')).toBeInTheDocument();
+    expect(screen.getByText('Создать скрипт')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Импорт из библиотеки'));
+
+    expect(await screen.findByText('Системная библиотека скриптов')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Поиск системных скриптов...')).toBeInTheDocument();
+    expect(screen.getByText('Системных скриптов нет')).toBeInTheDocument();
   });
 });

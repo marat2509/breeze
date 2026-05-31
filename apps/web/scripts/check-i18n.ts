@@ -132,6 +132,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/filters/SavedFilterList.tsx',
   'src/components/filters/ValueInput.tsx',
   'src/components/scripts/ScriptParametersForm.tsx',
+  'src/components/scripts/ScriptsPage.tsx',
   'src/components/auth/MFAVerifyForm.tsx',
   'src/components/layout/CommandPalette.tsx',
   'src/components/layout/Header.tsx',
