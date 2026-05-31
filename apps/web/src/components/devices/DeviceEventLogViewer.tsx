@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  CheckCircle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +22,10 @@ import {
   Bot,
 } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { formatNumber, formatRelativeTime as formatRelativeTimeLabel } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
+import type { TranslationParams } from '@/i18n/resources';
 
 type ActivityEntry = {
   id: string;
@@ -51,6 +54,8 @@ type DeviceEventLogViewerProps = {
   deviceId: string;
   timezone?: string;
 };
+
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
 
 const categoryConfig: Record<string, { label: string; icon: typeof Monitor; color: string }> = {
   device: { label: 'Device', icon: Monitor, color: 'border-blue-500/30 bg-blue-500/10 text-blue-600' },
@@ -87,21 +92,21 @@ const initiatedByConfig: Record<string, { label: string; icon: typeof User; colo
 };
 
 const INITIATED_BY_OPTIONS = [
-  { value: '', label: 'All sources' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'ai', label: 'AI' },
-  { value: 'automation', label: 'Automation' },
-  { value: 'policy', label: 'Policy' },
-  { value: 'schedule', label: 'Schedule' },
-  { value: 'agent', label: 'Agent' },
-  { value: 'integration', label: 'Integration' },
+  { value: '' },
+  { value: 'manual' },
+  { value: 'ai' },
+  { value: 'automation' },
+  { value: 'policy' },
+  { value: 'schedule' },
+  { value: 'agent' },
+  { value: 'integration' },
 ];
 
-function formatDateTime(value?: string | null, timezone?: string) {
+function formatDateTime(value: string | null | undefined, timezone: string | undefined, locale: Locale) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
+  return date.toLocaleString(locale, {
     ...(timezone ? { timeZone: timezone } : {}),
     month: 'short',
     day: 'numeric',
@@ -111,41 +116,54 @@ function formatDateTime(value?: string | null, timezone?: string) {
   });
 }
 
-function formatRelativeTime(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return '';
-}
-
 const CATEGORY_OPTIONS = [
-  { value: '', label: 'All categories' },
-  { value: 'device', label: 'Device' },
-  { value: 'agent', label: 'Agent' },
-  { value: 'script', label: 'Script' },
-  { value: 'patch', label: 'Patch' },
-  { value: 'alert', label: 'Alert' },
-  { value: 'config_policy', label: 'Policy' },
-  { value: 'deployment', label: 'Deployment' },
-  { value: 'software', label: 'Software' },
-  { value: 'backup', label: 'Backup' },
-  { value: 'discovery', label: 'Discovery' },
-  { value: 'automation', label: 'Automation' },
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'monitor', label: 'Monitoring' },
-  { value: 'ai', label: 'AI' },
+  { value: '', labelKey: 'allCategories' },
+  { value: 'device', labelKey: 'device' },
+  { value: 'agent', labelKey: 'agent' },
+  { value: 'script', labelKey: 'script' },
+  { value: 'patch', labelKey: 'patch' },
+  { value: 'alert', labelKey: 'alert' },
+  { value: 'config_policy', labelKey: 'policy' },
+  { value: 'deployment', labelKey: 'deployment' },
+  { value: 'software', labelKey: 'software' },
+  { value: 'backup', labelKey: 'backup' },
+  { value: 'discovery', labelKey: 'discovery' },
+  { value: 'automation', labelKey: 'automation' },
+  { value: 'maintenance', labelKey: 'maintenance' },
+  { value: 'monitor', labelKey: 'monitoring' },
+  { value: 'ai', labelKey: 'ai' },
 ];
 
+function configKey(value: string): string {
+  if (value === 'config_policy') return 'policy';
+  if (value === 'monitor') return 'monitoring';
+  return value;
+}
+
+function categoryLabel(category: string, t: Translate): string {
+  const key = configKey(category);
+  return t(`deviceEventLog.categories.${key}`, undefined, categoryConfig[key]?.label ?? category);
+}
+
+function resultLabel(result: string, t: Translate): string {
+  return t(`deviceEventLog.results.${result}`, undefined, resultConfig[result]?.label ?? result);
+}
+
+function initiatedByLabel(value: string, t: Translate): string {
+  return t(`deviceEventLog.initiatedBy.${value}`, undefined, initiatedByConfig[value]?.label ?? value);
+}
+
+function actorTypeLabel(value: string, t: Translate): string {
+  return t(`deviceEventLog.actorTypes.${value}`, undefined, value);
+}
+
+function totalLabel(total: number, locale: Locale, t: Translate): string {
+  return t('deviceEventLog.total', { count: formatNumber(total, locale) });
+}
+
 export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEventLogViewerProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -160,6 +178,10 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0 });
 
   const effectiveTimezone = timezone ?? siteTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   // Debounce search
   useEffect(() => {
@@ -185,7 +207,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
       if (resultFilter) params.set('result', resultFilter);
 
       const response = await fetchWithAuth(`/devices/${deviceId}/events?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch activities');
+      if (!response.ok) throw new Error(tRef.current('deviceEventLog.errors.fetch'));
       const json = await response.json();
       setActivities(json?.data ?? []);
       if (json?.pagination) setPagination(json.pagination);
@@ -193,7 +215,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
         setSiteTimezone(json.timezone ?? json.siteTimezone);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch activities');
+      setError(err instanceof Error ? err.message : tRef.current('deviceEventLog.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -214,7 +236,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
           onClick={fetchActivities}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceEventLog.retry')}
         </button>
       </div>
     );
@@ -228,10 +250,10 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
           {/* Title */}
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">Activities</h3>
+            <h3 className="text-lg font-semibold">{t('deviceEventLog.title')}</h3>
             {!loading && (
               <span className="ml-1 text-sm text-muted-foreground">
-                ({pagination.total.toLocaleString()} total)
+                {totalLabel(pagination.total, locale, t)}
               </span>
             )}
           </div>
@@ -243,7 +265,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search activities..."
+                placeholder={t('deviceEventLog.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-8 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -259,7 +281,9 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                 className="h-8 rounded-md border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 {CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>
+                    {opt.value ? t(`deviceEventLog.categories.${opt.labelKey}`) : t('deviceEventLog.allCategories')}
+                  </option>
                 ))}
               </select>
             </div>
@@ -271,16 +295,18 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
               className="h-8 rounded-md border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               {INITIATED_BY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.value ? initiatedByLabel(opt.value, t) : t('deviceEventLog.allSources')}
+                </option>
               ))}
             </select>
 
             {/* Result filter */}
             <div className="flex items-center rounded-md border bg-background">
               {[
-                { value: '', label: 'All' },
-                { value: 'success', label: 'Success' },
-                { value: 'failure', label: 'Failed' },
+                { value: '', label: t('deviceEventLog.allResults') },
+                { value: 'success', label: resultLabel('success', t) },
+                { value: 'failure', label: resultLabel('failure', t) },
               ].map((opt) => (
                 <button
                   key={opt.value}
@@ -306,21 +332,22 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="mt-3 text-sm text-muted-foreground">Loading activities...</p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('deviceEventLog.loading')}</p>
             </div>
           </div>
         ) : activities.length === 0 ? (
           <div className="py-12 text-center">
             <FileText className="mx-auto h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-2 text-sm text-muted-foreground">No activities match the current filters.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t('deviceEventLog.empty')}</p>
           </div>
         ) : (
           <div className="divide-y">
             {activities.map((activity) => {
               const isExpanded = expandedId === activity.id;
-              const relTime = formatRelativeTime(activity.timestamp);
+              const relTime = activity.timestamp ? formatRelativeTimeLabel(activity.timestamp, locale) : '';
               const rc = resultConfig[activity.result] ?? resultConfig.success;
-              const cc = categoryConfig[activity.category] ?? categoryConfig.system;
+              const categoryKey = configKey(activity.category);
+              const cc = categoryConfig[categoryKey] ?? categoryConfig.system;
               const CatIcon = cc.icon;
 
               return (
@@ -343,7 +370,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {formatDateTime(activity.timestamp, effectiveTimezone) ?? 'Unknown'}
+                              {formatDateTime(activity.timestamp, effectiveTimezone, locale) ?? t('deviceEventLog.unknown')}
                               {relTime && <span className="text-muted-foreground/60">({relTime})</span>}
                             </span>
 
@@ -372,7 +399,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                             return (
                               <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ib.color}`}>
                                 <IbIcon className="h-2.5 w-2.5" />
-                                {ib.label}
+                                {initiatedByLabel(activity.initiatedBy!, t)}
                               </span>
                             );
                           })()}
@@ -380,7 +407,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                           {/* Category badge */}
                           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cc.color}`}>
                             <CatIcon className="h-2.5 w-2.5" />
-                            {cc.label}
+                            {categoryLabel(activity.category, t)}
                           </span>
 
                           {/* Result badge */}
@@ -390,7 +417,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                                 ? 'border-red-500/30 bg-red-500/10 text-red-600'
                                 : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-600'
                             }`}>
-                              {rc.label}
+                              {resultLabel(activity.result, t)}
                             </span>
                           )}
 
@@ -408,48 +435,48 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
                       <div className="ml-5 space-y-3">
                         <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-4">
                           <div>
-                            <span className="font-medium text-muted-foreground">Action</span>
+                            <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.action')}</span>
                             <p className="mt-0.5 font-mono text-[11px]">{activity.action}</p>
                           </div>
                           <div>
-                            <span className="font-medium text-muted-foreground">Result</span>
+                            <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.result')}</span>
                             <p className="mt-0.5 flex items-center gap-1.5">
                               <span className={`inline-block h-1.5 w-1.5 rounded-full ${rc.dot}`} />
-                              <span className="capitalize">{activity.result}</span>
+                              <span>{resultLabel(activity.result, t)}</span>
                             </p>
                           </div>
                           <div>
-                            <span className="font-medium text-muted-foreground">Actor</span>
+                            <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.actor')}</span>
                             <p className="mt-0.5">
                               {activity.actor.name}
-                              <span className="ml-1 text-muted-foreground">({activity.actor.type})</span>
+                              <span className="ml-1 text-muted-foreground">({actorTypeLabel(activity.actor.type, t)})</span>
                             </p>
                           </div>
                           {activity.actor.email && (
                             <div>
-                              <span className="font-medium text-muted-foreground">Email</span>
+                              <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.email')}</span>
                               <p className="mt-0.5">{activity.actor.email}</p>
                             </div>
                           )}
                           <div>
-                            <span className="font-medium text-muted-foreground">Timestamp</span>
-                            <p className="mt-0.5">{formatDateTime(activity.timestamp, effectiveTimezone)}</p>
+                            <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.timestamp')}</span>
+                            <p className="mt-0.5">{formatDateTime(activity.timestamp, effectiveTimezone, locale)}</p>
                           </div>
                           {activity.resource.type && (
                             <div>
-                              <span className="font-medium text-muted-foreground">Resource Type</span>
+                              <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.resourceType')}</span>
                               <p className="mt-0.5">{activity.resource.type}</p>
                             </div>
                           )}
                           {activity.resource.name && (
                             <div>
-                              <span className="font-medium text-muted-foreground">Resource</span>
+                              <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.resource')}</span>
                               <p className="mt-0.5">{activity.resource.name}</p>
                             </div>
                           )}
                           {activity.ipAddress && (
                             <div>
-                              <span className="font-medium text-muted-foreground">IP Address</span>
+                              <span className="font-medium text-muted-foreground">{t('deviceEventLog.details.ipAddress')}</span>
                               <p className="mt-0.5 font-mono text-[11px]">{activity.ipAddress}</p>
                             </div>
                           )}
@@ -461,7 +488,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
 
                         {activity.errorMessage && (
                           <div>
-                            <span className="text-xs font-medium text-red-600">Error</span>
+                            <span className="text-xs font-medium text-red-600">{t('deviceEventLog.details.error')}</span>
                             <p className="mt-1 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
                               {activity.errorMessage}
                             </p>
@@ -470,7 +497,7 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
 
                         {activity.details && Object.keys(activity.details).length > 0 && (
                           <div>
-                            <span className="text-xs font-medium text-muted-foreground">Details</span>
+                            <span className="text-xs font-medium text-muted-foreground">{t('deviceEventLog.details.details')}</span>
                             <pre className="mt-1 max-h-48 overflow-auto rounded-md border bg-background p-3 text-[11px] leading-relaxed font-mono">
                               {JSON.stringify(activity.details, null, 2)}
                             </pre>
@@ -489,8 +516,11 @@ export default function DeviceEventLogViewer({ deviceId, timezone }: DeviceEvent
         {!loading && pagination.total > pagination.limit && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <p className="text-xs text-muted-foreground">
-              Showing {((page - 1) * pagination.limit) + 1}–{Math.min(page * pagination.limit, pagination.total)} of{' '}
-              {pagination.total.toLocaleString()}
+              {t('deviceEventLog.pagination.showing', {
+                start: formatNumber(((page - 1) * pagination.limit) + 1, locale),
+                end: formatNumber(Math.min(page * pagination.limit, pagination.total), locale),
+                total: formatNumber(pagination.total, locale),
+              })}
             </p>
             <div className="flex items-center gap-1">
               <button
