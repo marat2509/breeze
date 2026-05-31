@@ -11,11 +11,17 @@ import { useScriptAiStore } from '@/stores/scriptAiStore';
 import type { ScriptFormBridge } from '@/stores/scriptAiStore';
 import type { OSType } from './ScriptList';
 import {
-  scriptSchema, languageOptions, categoryOptions,
-  runAsOptions, parameterTypeOptions, severityOptions,
+  createScriptSchema,
+  createLanguageOptions,
+  createCategoryOptions,
+  createRunAsOptions,
+  createParameterTypeOptions,
+  createSeverityOptions,
   rowsToMapping,
   type ScriptFormValues, type ScriptSubmitValues,
 } from './ScriptFormSchema';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 export type { ScriptFormValues, ScriptParameter, ScriptSubmitValues } from './ScriptFormSchema';
 
@@ -31,10 +37,10 @@ export default function ScriptForm({
   onSubmit,
   onCancel,
   defaultValues,
-  submitLabel = 'Save script',
+  submitLabel,
   loading
 }: ScriptFormProps) {
-  const [editorMounted, setEditorMounted] = useState(false);
+  const { locale, t } = useI18n();
   const editorInstanceRef = useRef<Parameters<NonNullable<EditorProps['onMount']>>[0] | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -45,6 +51,14 @@ export default function ScriptForm({
   // on SPA back-navigation (e.g. scripts list → edit → list → edit).
   const [MonacoEditor, setMonacoEditor] = useState<ComponentType<EditorProps> | null>(null);
   const [editorLoadError, setEditorLoadError] = useState<string | null>(null);
+  const scriptSchema = useMemo(() => createScriptSchema(t), [t]);
+  const languageOptions = useMemo(() => createLanguageOptions(t), [t]);
+  const categoryOptions = useMemo(() => createCategoryOptions(t), [t]);
+  const runAsOptions = useMemo(() => createRunAsOptions(t), [t]);
+  const parameterTypeOptions = useMemo(() => createParameterTypeOptions(t), [t]);
+  const severityOptions = useMemo(() => createSeverityOptions(t), [t]);
+  const effectiveSubmitLabel = submitLabel ?? t('scripts.form.saveScript');
+
   useEffect(() => {
     let cancelled = false;
     const loadEditor = () => {
@@ -57,7 +71,7 @@ export default function ScriptForm({
         .catch((err) => {
           if (!cancelled) {
             console.error('Failed to load script editor:', err);
-            setEditorLoadError('Failed to load the code editor. Try refreshing the page.');
+            setEditorLoadError(t('scripts.form.editorLoadFailed'));
           }
         });
     };
@@ -67,7 +81,7 @@ export default function ScriptForm({
       cancelled = true;
       document.removeEventListener('astro:after-swap', loadEditor);
     };
-  }, []);
+  }, [t]);
 
   // Force editor relayout after View Transition navigation completes
   useEffect(() => {
@@ -159,7 +173,7 @@ export default function ScriptForm({
     };
     const onAstroNav = (e: Event) => {
       if (skipGuardRef.current) { skipGuardRef.current = false; return; }
-      if (isDirtyRef.current && !window.confirm('You have unsaved changes. Leave this page?')) {
+      if (isDirtyRef.current && !window.confirm(t('scripts.form.unsavedConfirm'))) {
         e.preventDefault();
       }
     };
@@ -169,7 +183,7 @@ export default function ScriptForm({
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('astro:before-preparation', onAstroNav);
     };
-  }, []);
+  }, [t]);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -195,7 +209,7 @@ export default function ScriptForm({
 
   const monacoLanguage = useMemo(() => {
     return languageOptions.find(l => l.value === watchLanguage)?.monacoLang || 'plaintext';
-  }, [watchLanguage]);
+  }, [languageOptions, watchLanguage]);
 
   const isLoading = useMemo(() => loading ?? isSubmitting, [loading, isSubmitting]);
 
@@ -245,11 +259,11 @@ export default function ScriptForm({
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="script-name" className="text-sm font-medium">
-            Script name
+            {t('scripts.form.scriptName')}
           </label>
           <input
             id="script-name"
-            placeholder="Clear Temp Files"
+            placeholder={t('scripts.form.scriptNamePlaceholder')}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             {...register('name')}
           />
@@ -258,7 +272,7 @@ export default function ScriptForm({
 
         <div className="space-y-2">
           <label htmlFor="script-category" className="text-sm font-medium">
-            Category
+            {t('scripts.form.category')}
           </label>
           <select
             id="script-category"
@@ -266,8 +280,8 @@ export default function ScriptForm({
             {...register('category')}
           >
             {categoryOptions.map(cat => (
-              <option key={cat} value={cat}>
-                {cat}
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
               </option>
             ))}
           </select>
@@ -276,11 +290,11 @@ export default function ScriptForm({
 
         <div className="space-y-2 md:col-span-2">
           <label htmlFor="script-description" className="text-sm font-medium">
-            Description
+            {t('scripts.form.description')}
           </label>
           <textarea
             id="script-description"
-            placeholder="Describe what this script does..."
+            placeholder={t('scripts.form.descriptionPlaceholder')}
             rows={2}
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
             {...register('description')}
@@ -289,7 +303,7 @@ export default function ScriptForm({
 
         <div className="space-y-2">
           <label htmlFor="script-language" className="text-sm font-medium">
-            Language
+            {t('scripts.form.language')}
           </label>
           <select
             id="script-language"
@@ -306,7 +320,7 @@ export default function ScriptForm({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Target OS</label>
+          <label className="text-sm font-medium">{t('scripts.form.targetOs')}</label>
           <div className="flex flex-wrap gap-2">
             {(['windows', 'macos', 'linux'] as OSType[]).map(os => (
               <button
@@ -320,7 +334,7 @@ export default function ScriptForm({
                     : 'border-input bg-background hover:bg-muted'
                 )}
               >
-                {os === 'windows' ? 'Windows' : os === 'macos' ? 'macOS' : 'Linux'}
+                {t(`scripts.list.os.${os}`)}
               </button>
             ))}
           </div>
@@ -331,7 +345,7 @@ export default function ScriptForm({
       {/* Script Content + AI Panel */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold tracking-tight">Script Content</h3>
+          <h3 className="text-base font-bold tracking-tight">{t('scripts.form.scriptContent')}</h3>
           <button
             type="button"
             onClick={togglePanel}
@@ -341,10 +355,10 @@ export default function ScriptForm({
                 ? 'bg-primary text-primary-foreground'
                 : 'border hover:bg-muted'
             )}
-            title="Toggle AI Script Assistant (⌘⇧I)"
+            title={t('scripts.form.toggleAiTitle')}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            AI Assistant
+            {t('scripts.form.aiAssistant')}
           </button>
         </div>
         <div className="flex rounded-md border">
@@ -361,7 +375,6 @@ export default function ScriptForm({
                     onChange={(value) => field.onChange(value || '')}
                     onMount={(editor) => {
                       editorInstanceRef.current = editor;
-                      setEditorMounted(true);
                       requestAnimationFrame(() => editor.layout());
                     }}
                     theme="vs-dark"
@@ -383,13 +396,13 @@ export default function ScriptForm({
                         <>
                           <p className="text-sm text-red-400">{editorLoadError}</p>
                           <button type="button" onClick={() => window.location.reload()} className="mt-2 text-xs underline hover:text-white">
-                            Refresh page
+                            {t('scripts.form.refreshPage')}
                           </button>
                         </>
                       ) : (
                         <>
                           <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white mx-auto" />
-                          <p className="mt-2 text-sm">Loading editor...</p>
+                          <p className="mt-2 text-sm">{t('scripts.form.loadingEditor')}</p>
                         </>
                       )}
                     </div>
@@ -405,56 +418,58 @@ export default function ScriptForm({
 
       {/* Parameters */}
       <CollapsibleSection
-        title="Parameters"
+        title={t('scripts.form.parameters')}
         open={paramsOpen}
         onToggle={() => setParamsOpen(prev => !prev)}
         badge={fields.length > 0 ? (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{fields.length}</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{formatNumber(fields.length, locale)}</span>
         ) : undefined}
       >
         <div className="space-y-3">
           {fields.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No parameters yet. Parameters let users supply values at runtime &mdash; reference them
-              in your script as <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">$paramName</code> (PowerShell/Bash)
-              or <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">sys.argv</code> (Python).
+              {t('scripts.form.parametersEmptyPrefix')}{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">$paramName</code>{' '}
+              {t('scripts.form.parametersEmptyMiddle')}{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">sys.argv</code>{' '}
+              {t('scripts.form.parametersEmptySuffix')}
             </p>
           )}
           {fields.map((field, index) => (
             <div key={field.id} className="rounded-md border bg-muted/20 p-4">
               <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground mt-2">{index + 1}</span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground mt-2">{formatNumber(index + 1, locale)}</span>
                 <div className="flex-1 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Name</label>
-                    <input placeholder="paramName" className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.name`)} />
+                    <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.parameterName')}</label>
+                    <input placeholder={t('scripts.form.parameterNamePlaceholder')} className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.name`)} />
                     {errors.parameters?.[index]?.name && <p className="text-xs text-destructive">{errors.parameters[index]?.name?.message}</p>}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Type</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.parameterType')}</label>
                     <select className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.type`)}>
                       {parameterTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Default Value</label>
-                    <input placeholder="Default" className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.defaultValue`)} />
+                    <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.defaultValue')}</label>
+                    <input placeholder={t('scripts.form.defaultValuePlaceholder')} className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.defaultValue`)} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Required</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.required')}</label>
                     <div className="flex items-center h-9">
                       <input type="checkbox" className="h-4 w-4 rounded border-border" {...register(`parameters.${index}.required`)} />
-                      <span className="ml-2 text-sm">Yes</span>
+                      <span className="ml-2 text-sm">{t('scripts.form.yes')}</span>
                     </div>
                   </div>
                   {watchParameters?.[index]?.type === 'select' && (
                     <div className="space-y-1 sm:col-span-2 md:col-span-4">
-                      <label className="text-xs font-medium text-muted-foreground">Options (comma-separated)</label>
-                      <input placeholder="option1, option2, option3" className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.options`)} />
+                      <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.options')}</label>
+                      <input placeholder={t('scripts.form.optionsPlaceholder')} className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register(`parameters.${index}.options`)} />
                     </div>
                   )}
                 </div>
-                <button type="button" onClick={() => remove(index)} className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted text-destructive" title="Remove parameter">
+                <button type="button" onClick={() => remove(index)} className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted text-destructive" title={t('scripts.form.removeParameter')}>
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -462,34 +477,41 @@ export default function ScriptForm({
           ))}
           <button type="button" onClick={addParameter} className="inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition">
             <Plus className="h-4 w-4" />
-            Add parameter
+            {t('scripts.form.addParameter')}
           </button>
         </div>
       </CollapsibleSection>
 
       {/* Execution Settings */}
       <CollapsibleSection
-        title="Execution Settings"
+        title={t('scripts.form.executionSettings')}
         open={settingsOpen}
         onToggle={() => setSettingsOpen(prev => !prev)}
-        summary={<span className="text-xs text-muted-foreground">{watch('timeoutSeconds')}s &middot; {runAsOptions.find(o => o.value === watch('runAs'))?.label}</span>}
+        summary={
+          <span className="text-xs text-muted-foreground">
+            {t('scripts.form.timeoutSummary', {
+              seconds: formatNumber(Number(watch('timeoutSeconds') ?? 0), locale),
+              runAs: runAsOptions.find(o => o.value === watch('runAs'))?.label ?? '',
+            })}
+          </span>
+        }
       >
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <label htmlFor="timeout-seconds" className="text-sm font-medium">Timeout (seconds)</label>
+            <label htmlFor="timeout-seconds" className="text-sm font-medium">{t('scripts.form.timeoutSeconds')}</label>
             <input id="timeout-seconds" type="number" min={1} max={86400} className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register('timeoutSeconds')} />
             {errors.timeoutSeconds && <p className="text-sm text-destructive">{errors.timeoutSeconds.message}</p>}
-            <p className="text-xs text-muted-foreground">Script is killed after this duration. Default 300s (5 min) is suitable for most tasks.</p>
+            <p className="text-xs text-muted-foreground">{t('scripts.form.timeoutHelp')}</p>
           </div>
           <div className="space-y-2">
-            <label htmlFor="run-as" className="text-sm font-medium">Run As</label>
+            <label htmlFor="run-as" className="text-sm font-medium">{t('scripts.form.runAsLabel')}</label>
             <select id="run-as" className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" {...register('runAs')}>
               {runAsOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
             {errors.runAs && <p className="text-sm text-destructive">{errors.runAs.message}</p>}
             <p className="text-xs text-muted-foreground">
-              {runAsOptions.find(o => o.value === watch('runAs'))?.description}.
-              {watch('runAs') === 'elevated' && ' Uses sudo on macOS/Linux, runas on Windows.'}
+              {runAsOptions.find(o => o.value === watch('runAs'))?.description}
+              {watch('runAs') === 'elevated' && ` ${t('scripts.form.elevatedHelp')}`}
             </p>
           </div>
         </div>
@@ -497,32 +519,31 @@ export default function ScriptForm({
 
       {/* Exit-code severity mapping */}
       <CollapsibleSection
-        title="Exit Code Severity"
+        title={t('scripts.form.exitCodeSeverity')}
         open={severityOpen}
         onToggle={() => setSeverityOpen(prev => !prev)}
         badge={severityFields.length > 0 ? (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{severityFields.length}</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{formatNumber(severityFields.length, locale)}</span>
         ) : undefined}
       >
         <div className="space-y-3">
           {severityFields.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Map specific exit codes to alert severities. When the script returns one of these codes,
-              an alert is raised at the configured severity. Choose <em>Suppress alert</em> to mark a
-              code as informational (no incident raised). Exit codes you don&apos;t list here use the
-              default outcome handling.
+              {t('scripts.form.exitSeverityEmptyPrefix')}{' '}
+              <em>{t('scripts.form.suppressAlert')}</em>{' '}
+              {t('scripts.form.exitSeverityEmptySuffix')}
             </p>
           )}
           {severityFields.map((field, index) => (
             <div key={field.id} className="flex items-start gap-3 rounded-md border bg-muted/20 p-3">
               <div className="grid flex-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Exit code</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.exitCode')}</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    placeholder="e.g. 1"
+                    placeholder={t('scripts.form.exitCodePlaceholder')}
                     className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     {...register(`exitCodeSeverityMapping.${index}.exitCode`)}
                   />
@@ -533,7 +554,7 @@ export default function ScriptForm({
                   )}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Severity</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t('scripts.form.severityLabel')}</label>
                   <select
                     className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     {...register(`exitCodeSeverityMapping.${index}.severity`)}
@@ -543,7 +564,7 @@ export default function ScriptForm({
                     ))}
                   </select>
                   <p className="text-xs text-muted-foreground">
-                    Suppress alert &mdash; exit code is treated as informational, no incident raised.
+                    {t('scripts.form.suppressAlertDescription')}
                   </p>
                 </div>
               </div>
@@ -551,7 +572,7 @@ export default function ScriptForm({
                 type="button"
                 onClick={() => removeSeverity(index)}
                 className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted text-destructive"
-                title="Remove mapping"
+                title={t('scripts.form.removeMapping')}
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -563,7 +584,7 @@ export default function ScriptForm({
             className="inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
           >
             <Plus className="h-4 w-4" />
-            Add exit code
+            {t('scripts.form.addExitCode')}
           </button>
         </div>
       </CollapsibleSection>
@@ -571,7 +592,9 @@ export default function ScriptForm({
       {/* Form Actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="hidden text-xs text-muted-foreground sm:block">
-          {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac') ? '⌘S' : 'Ctrl+S'} to save
+          {t('scripts.form.shortcutSave', {
+            shortcut: typeof navigator !== 'undefined' && /\bMac/i.test(navigator.userAgent) ? '⌘S' : 'Ctrl+S',
+          })}
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
@@ -579,14 +602,14 @@ export default function ScriptForm({
             onClick={onCancel}
             className="h-11 w-full rounded-md border bg-background text-sm font-medium text-foreground transition hover:bg-muted sm:w-auto sm:px-6"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
             disabled={isLoading}
             className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-6"
           >
-            {isLoading ? 'Saving...' : submitLabel}
+            {isLoading ? t('common.saving') : effectiveSubmitLabel}
           </button>
         </div>
       </div>
