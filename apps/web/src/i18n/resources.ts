@@ -1432,6 +1432,78 @@ export const resources = {
         fetch: 'Failed to fetch IP history',
       },
     },
+    deviceBootPerformance: {
+      loading: 'Loading boot performance data...',
+      retry: 'Retry',
+      emptyTitle: 'No Boot Performance Data',
+      emptyDescription: 'Boot metrics will appear after the agent collects them during a reboot cycle.',
+      collectNow: 'Collect Now',
+      title: 'Boot Performance',
+      description: 'Boot time trends, phase breakdown, and startup item analysis.',
+      refresh: 'Refresh',
+      notices: {
+        collectionTriggered: 'Boot metrics collection triggered. Data will appear after next boot or collection cycle.',
+      },
+      errors: {
+        fetch: 'Failed to load boot performance data',
+        collect: 'Failed to trigger collection',
+      },
+      duration: {
+        seconds: '{{seconds}}s',
+        minutesSeconds: '{{minutes}}m {{seconds}}s',
+        milliseconds: '{{milliseconds}}ms',
+      },
+      summary: {
+        avgBootTime: 'Avg Boot Time',
+        fastestBoot: 'Fastest Boot',
+        slowestBoot: 'Slowest Boot',
+        bootsTracked: 'Boots Tracked',
+      },
+      charts: {
+        bootTimeTrend: 'Boot Time Trend',
+      },
+      phases: {
+        bios: 'BIOS',
+        osLoader: 'OS Loader',
+        desktopReady: 'Desktop Ready',
+        total: 'Total',
+        totalBootTime: 'Total Boot Time',
+      },
+      startup: {
+        titleLatest: 'Startup Items (Latest Boot)',
+        columns: {
+          name: 'Name',
+          type: 'Type',
+          status: 'Status',
+          cpuTime: 'CPU Time',
+          diskIo: 'Disk I/O',
+          impact: 'Impact',
+        },
+      },
+      startupTypes: {
+        registry: 'Registry',
+        folder: 'Startup Folder',
+        service: 'Service',
+        scheduled_task: 'Scheduled Task',
+        launchd: 'LaunchD',
+        systemd: 'Systemd',
+        login_item: 'Login Item',
+      },
+      status: {
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+      },
+      history: {
+        title: 'Boot History',
+        topItems: 'Top {{count}} Startup Items by Impact',
+        cpuTime: '{{value}} CPU',
+        columns: {
+          timestamp: 'Timestamp',
+          totalTime: 'Total Time',
+          startupItems: 'Startup Items',
+        },
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -3331,6 +3403,78 @@ export const resources = {
         forbidden: 'У вас нет прав для просмотра истории IP',
         fetchStatus: 'Не удалось загрузить историю IP (HTTP {{status}})',
         fetch: 'Не удалось загрузить историю IP',
+      },
+    },
+    deviceBootPerformance: {
+      loading: 'Загрузка данных производительности загрузки...',
+      retry: 'Повторить',
+      emptyTitle: 'Нет данных производительности загрузки',
+      emptyDescription: 'Метрики загрузки появятся после того, как агент соберёт их во время цикла перезагрузки.',
+      collectNow: 'Собрать сейчас',
+      title: 'Производительность загрузки',
+      description: 'Тренды времени загрузки, разбивка по фазам и анализ элементов автозагрузки.',
+      refresh: 'Обновить',
+      notices: {
+        collectionTriggered: 'Сбор метрик загрузки запущен. Данные появятся после следующей загрузки или цикла сбора.',
+      },
+      errors: {
+        fetch: 'Не удалось загрузить данные производительности загрузки',
+        collect: 'Не удалось запустить сбор',
+      },
+      duration: {
+        seconds: '{{seconds}} с',
+        minutesSeconds: '{{minutes}} мин {{seconds}} с',
+        milliseconds: '{{milliseconds}} мс',
+      },
+      summary: {
+        avgBootTime: 'Среднее время загрузки',
+        fastestBoot: 'Самая быстрая загрузка',
+        slowestBoot: 'Самая медленная загрузка',
+        bootsTracked: 'Загрузок отслежено',
+      },
+      charts: {
+        bootTimeTrend: 'Тренд времени загрузки',
+      },
+      phases: {
+        bios: 'BIOS',
+        osLoader: 'Загрузчик ОС',
+        desktopReady: 'Рабочий стол готов',
+        total: 'Всего',
+        totalBootTime: 'Общее время загрузки',
+      },
+      startup: {
+        titleLatest: 'Элементы автозагрузки (последняя загрузка)',
+        columns: {
+          name: 'Имя',
+          type: 'Тип',
+          status: 'Статус',
+          cpuTime: 'Время CPU',
+          diskIo: 'Дисковый I/O',
+          impact: 'Влияние',
+        },
+      },
+      startupTypes: {
+        registry: 'Реестр',
+        folder: 'Папка автозагрузки',
+        service: 'Служба',
+        scheduled_task: 'Запланированная задача',
+        launchd: 'LaunchD',
+        systemd: 'Systemd',
+        login_item: 'Элемент входа',
+      },
+      status: {
+        enabled: 'Включено',
+        disabled: 'Отключено',
+      },
+      history: {
+        title: 'История загрузок',
+        topItems: 'Топ {{count}} элементов автозагрузки по влиянию',
+        cpuTime: '{{value}} CPU',
+        columns: {
+          timestamp: 'Время',
+          totalTime: 'Общее время',
+          startupItems: 'Элементы автозагрузки',
+        },
       },
     },
     scripts: {

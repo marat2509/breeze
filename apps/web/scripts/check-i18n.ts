@@ -81,6 +81,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/CreateGroupModal.tsx',
   'src/components/devices/DeviceAlertHistory.tsx',
   'src/components/devices/DeviceActions.tsx',
+  'src/components/devices/DeviceBootPerformanceTab.tsx',
   'src/components/devices/DeviceCard.tsx',
   'src/components/devices/DeviceDetails.tsx',
   'src/components/devices/DeviceEffectiveConfigTab.tsx',
