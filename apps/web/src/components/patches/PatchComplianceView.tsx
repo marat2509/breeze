@@ -17,9 +17,11 @@ import {
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
-import { formatRelativeTime, lastActivity, toNumber, type DevicePatchRow } from './patchHelpers';
+import { formatNumber, formatRelativeTime as formatLocalizedRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import { toNumber, type DevicePatchRow } from './patchHelpers';
 import { usePatchSelection } from './usePatchSelection';
-import { useBulkActions } from './useBulkActions';
+import { useBulkActions, type BulkActionMessages } from './useBulkActions';
 
 type ComplianceSummary = {
   totalDevices: number;
@@ -34,6 +36,7 @@ type PatchComplianceViewProps = {
 };
 
 export default function PatchComplianceView({ ringId }: PatchComplianceViewProps) {
+  const { locale, t } = useI18n();
   const [devices, setDevices] = useState<DevicePatchRow[]>([]);
   const [summary, setSummary] = useState<ComplianceSummary>({ totalDevices: 0, compliantDevices: 0, criticalPatches: 0, pendingPatches: 0, rebootPending: 0 });
   const [loading, setLoading] = useState(true);
@@ -61,7 +64,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch patch data');
+        throw new Error(t('patchComplianceView.errors.fetchPatchData'));
       }
 
       const complianceData = (await complianceRes.json()).data ?? {};
@@ -84,8 +87,8 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
           const n = needingMap.get(id);
           merged.push({
             id,
-            hostname: String(n?.name ?? n?.hostname ?? raw.hostname ?? 'Unknown'),
-            osType: String(n?.os ?? n?.osType ?? raw.osType ?? raw.os_type ?? 'unknown'),
+            hostname: String(n?.name ?? n?.hostname ?? raw.hostname ?? t('patchComplianceView.fallbacks.unknownDevice')),
+            osType: String(n?.os ?? n?.osType ?? raw.osType ?? raw.os_type ?? t('patchComplianceView.fallbacks.unknownOs')),
             lastSeenAt: (n?.lastSeen ?? raw.lastSeenAt) ? String(n?.lastSeen ?? raw.lastSeenAt) : undefined,
             pendingPatches: toNumber(n?.missingCount ?? 0),
             criticalMissing: toNumber(n?.criticalCount ?? 0),
@@ -111,11 +114,11 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
         rebootPending: merged.filter(d => d.pendingReboot).length,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch patch data');
+      setError(err instanceof Error ? err.message : t('patchComplianceView.errors.fetchPatchData'));
     } finally {
       setLoading(false);
     }
-  }, [ringId]);
+  }, [ringId, t]);
 
   useEffect(() => {
     fetchData();
@@ -154,7 +157,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
         void navigateTo('/login', { replace: true });
         return [];
       }
-      throw new Error(`Failed to load pending patches for device ${deviceId}`);
+      throw new Error(t('patchComplianceView.errors.loadPendingPatchesForDevice', { deviceId }));
     }
 
     const payload = await response.json().catch(() => ({}));
@@ -167,15 +170,32 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
     return pending
       .map((patch: unknown) => (patch && typeof patch === 'object' && 'id' in patch && patch.id ? String(patch.id) : ''))
       .filter((patchId) => patchId.length > 0);
-  }, []);
+  }, [t]);
 
   const filteredIds = useMemo(() => filteredDevices.map(d => d.id), [filteredDevices]);
+  const bulkMessages = useMemo<BulkActionMessages>(() => {
+    const deviceNoun = (count: number) => count === 1
+      ? t('patchComplianceView.plurals.deviceOne')
+      : t('patchComplianceView.plurals.deviceMany');
+    return {
+      scanStartFailed: t('patchComplianceView.errors.startPatchScan'),
+      scanFallbackFailed: t('patchComplianceView.errors.startScan'),
+      scanQueued: (count) => t('patchComplianceView.bulk.scanQueued', { count, deviceNoun: deviceNoun(count) }),
+      installQueued: (count) => t('patchComplianceView.bulk.installQueued', { count, deviceNoun: deviceNoun(count) }),
+      installFailed: (failedCount, totalCount) =>
+        t('patchComplianceView.bulk.installFailed', { failedCount, totalCount }),
+      skippedNoPending: (count) =>
+        t('patchComplianceView.bulk.skippedNoPending', { count, deviceNoun: deviceNoun(count) }),
+      noInstallable: t('patchComplianceView.bulk.noInstallable'),
+      installFallbackFailed: t('patchComplianceView.errors.installPatches'),
+    };
+  }, [t]);
   const { selectedIds, allPageSelected: allSelected, somePageSelected: someSelected, toggleSelect, toggleSelectAll, clearSelection } = usePatchSelection(filteredIds);
   const { bulkAction, bulkError, setBulkError, bulkSuccess, setBulkSuccess, handleBulkScan, handleBulkInstall } = useBulkActions(
     selectedIds,
     clearSelection,
     fetchData,
-    { resolveInstallPatchIds }
+    { messages: bulkMessages, resolveInstallPatchIds }
   );
 
   const handleExport = useCallback(async () => {
@@ -189,12 +209,12 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
       const response = await fetchWithAuth(`/patches/compliance/report?${params}`);
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        throw new Error('Failed to generate report');
+        throw new Error(t('patchComplianceView.errors.generateReport'));
       }
       const result = await response.json();
       const reportId = result.reportId ?? result.data?.id ?? result.id;
       if (reportId) {
-        setBulkSuccess(`Compliance report ${reportId} queued. Preparing download...`);
+        setBulkSuccess(t('patchComplianceView.report.queued', { reportId }));
 
         if (reportPollTimerRef.current) {
           clearInterval(reportPollTimerRef.current);
@@ -204,7 +224,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
           try {
             const statusResponse = await fetchWithAuth(`/patches/compliance/report/${reportId}`);
             if (!statusResponse.ok) {
-              throw new Error('Failed to check report status');
+              throw new Error(t('patchComplianceView.errors.checkReportStatus'));
             }
             const payload = await statusResponse.json();
             const report = payload?.data ?? payload;
@@ -213,14 +233,14 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                 clearInterval(reportPollTimerRef.current);
                 reportPollTimerRef.current = null;
               }
-              setBulkSuccess(`Compliance report ${reportId} is ready. Starting download...`);
+              setBulkSuccess(t('patchComplianceView.report.ready', { reportId }));
               window.location.assign(`/api/v1/patches/compliance/report/${reportId}/download`);
             } else if (report?.status === 'failed') {
               if (reportPollTimerRef.current) {
                 clearInterval(reportPollTimerRef.current);
                 reportPollTimerRef.current = null;
               }
-              setBulkError(report?.errorMessage || `Compliance report ${reportId} failed`);
+              setBulkError(report?.errorMessage || t('patchComplianceView.report.failed', { reportId }));
               setBulkSuccess(undefined);
             }
           } catch (err) {
@@ -228,19 +248,19 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
               clearInterval(reportPollTimerRef.current);
               reportPollTimerRef.current = null;
             }
-            setBulkError(err instanceof Error ? err.message : 'Failed to check report status');
+            setBulkError(err instanceof Error ? err.message : t('patchComplianceView.errors.checkReportStatus'));
             setBulkSuccess(undefined);
           }
         }, 3000);
       } else {
-        setBulkError('Report was queued but no report ID was returned');
+        setBulkError(t('patchComplianceView.errors.missingReportId'));
       }
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'Failed to generate report');
+      setBulkError(err instanceof Error ? err.message : t('patchComplianceView.errors.generateReport'));
     } finally {
       setExporting(false);
     }
-  }, [ringId, setBulkError, setBulkSuccess]);
+  }, [ringId, setBulkError, setBulkSuccess, t]);
 
   const selectedPatchDeviceIds = useMemo(() => {
     return Array.from(selectedIds).filter(id => {
@@ -276,7 +296,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
       <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-center">
         <p className="text-sm text-destructive">{error}</p>
         <button type="button" onClick={fetchData} className="mt-3 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
-          Try again
+          {t('patchComplianceView.actions.tryAgain')}
         </button>
       </div>
     );
@@ -286,6 +306,35 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
     ? Math.round((summary.compliantDevices / summary.totalDevices) * 100)
     : 100;
   const nonCompliantCount = summary.totalDevices - summary.compliantDevices;
+  const formatDisplayNumber = (value: number) => formatNumber(value, locale);
+  const deviceNoun = (count: number) => count === 1
+    ? t('patchComplianceView.plurals.deviceOne')
+    : t('patchComplianceView.plurals.deviceMany');
+  const formatRelative = (value: string) => formatLocalizedRelativeTime(value, locale);
+  const getLastActivity = (installed?: string, scanned?: string): { label: string; tooltip: string } => {
+    const installedTime = installed ? new Date(installed).getTime() : 0;
+    const scannedTime = scanned ? new Date(scanned).getTime() : 0;
+    if (!installedTime && !scannedTime) {
+      return {
+        label: t('patchComplianceView.activity.noneLabel'),
+        tooltip: t('patchComplianceView.activity.noActivity'),
+      };
+    }
+    if (installedTime >= scannedTime && installed) {
+      return {
+        label: t('patchComplianceView.activity.installed', { time: formatRelative(installed) }),
+        tooltip: scanned
+          ? t('patchComplianceView.activity.lastScanned', { time: formatRelative(scanned) })
+          : t('patchComplianceView.activity.noScan'),
+      };
+    }
+    return {
+      label: scanned ? t('patchComplianceView.activity.scanned', { time: formatRelative(scanned) }) : t('patchComplianceView.activity.noneLabel'),
+      tooltip: installed
+        ? t('patchComplianceView.activity.lastInstalled', { time: formatRelative(installed) })
+        : t('patchComplianceView.activity.noInstall'),
+    };
+  };
 
   return (
     <div className="space-y-4">
@@ -294,24 +343,30 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span className="flex items-center gap-1.5 font-semibold">
             <Shield className="h-4 w-4 text-muted-foreground" />
-            {compliancePercent}% compliant
+            {t('patchComplianceView.summary.compliantPercent', { percent: formatDisplayNumber(compliancePercent) })}
           </span>
           <span className="text-muted-foreground">
-            {summary.compliantDevices} of {summary.totalDevices} devices
+            {t('patchComplianceView.summary.devices', {
+              compliant: formatDisplayNumber(summary.compliantDevices),
+              total: formatDisplayNumber(summary.totalDevices),
+              deviceNoun: deviceNoun(summary.totalDevices),
+            })}
           </span>
           {nonCompliantCount > 0 && (
             <span className="flex items-center gap-1 text-orange-600">
               <AlertTriangle className="h-3.5 w-3.5" />
-              {nonCompliantCount} need patches
+              {t('patchComplianceView.summary.needPatches', { count: formatDisplayNumber(nonCompliantCount) })}
             </span>
           )}
           {summary.criticalPatches > 0 && (
-            <span className="text-red-600 font-medium">{summary.criticalPatches} critical</span>
+            <span className="text-red-600 font-medium">
+              {t('patchComplianceView.summary.critical', { count: formatDisplayNumber(summary.criticalPatches) })}
+            </span>
           )}
           {summary.rebootPending > 0 && (
             <span className="flex items-center gap-1 text-orange-600">
               <RotateCcw className="h-3.5 w-3.5" />
-              {summary.rebootPending} reboot
+              {t('patchComplianceView.summary.reboot', { count: formatDisplayNumber(summary.rebootPending) })}
             </span>
           )}
         </div>
@@ -323,14 +378,14 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
             className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-            Export
+            {exporting ? t('patchComplianceView.actions.exporting') : t('patchComplianceView.actions.export')}
           </button>
           <button
             type="button"
             onClick={fetchData}
             disabled={loading}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
-            aria-label="Refresh compliance data"
+            aria-label={t('patchComplianceView.actions.refresh')}
           >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} aria-hidden="true" />
           </button>
@@ -343,7 +398,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
-            placeholder="Search devices..."
+            placeholder={t('patchComplianceView.filters.searchPlaceholder')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-56"
@@ -354,12 +409,12 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
           onChange={e => setStatusFilter(e.target.value)}
           className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          <option value="all">All Devices ({devices.length})</option>
-          <option value="needs-patches">Needs Patches ({nonCompliantCount})</option>
-          <option value="critical">Critical ({filterCounts.critical})</option>
-          <option value="reboot">Pending Reboot ({summary.rebootPending})</option>
-          <option value="3rd-party">3rd-Party Missing ({filterCounts.thirdParty})</option>
-          <option value="compliant">Compliant ({summary.compliantDevices})</option>
+          <option value="all">{t('patchComplianceView.filters.allDevices', { count: formatDisplayNumber(devices.length) })}</option>
+          <option value="needs-patches">{t('patchComplianceView.filters.needsPatches', { count: formatDisplayNumber(nonCompliantCount) })}</option>
+          <option value="critical">{t('patchComplianceView.filters.critical', { count: formatDisplayNumber(filterCounts.critical) })}</option>
+          <option value="reboot">{t('patchComplianceView.filters.reboot', { count: formatDisplayNumber(summary.rebootPending) })}</option>
+          <option value="3rd-party">{t('patchComplianceView.filters.thirdParty', { count: formatDisplayNumber(filterCounts.thirdParty) })}</option>
+          <option value="compliant">{t('patchComplianceView.filters.compliant', { count: formatDisplayNumber(summary.compliantDevices) })}</option>
         </select>
         {hasActiveFilters && (
           <button
@@ -367,12 +422,15 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
             onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
             className="h-9 rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
-            Clear
+            {t('patchComplianceView.actions.clear')}
           </button>
         )}
         {filteredDevices.length !== devices.length && (
           <span className="text-xs text-muted-foreground">
-            Showing {filteredDevices.length} of {devices.length}
+            {t('patchComplianceView.filters.showing', {
+              filtered: formatDisplayNumber(filteredDevices.length),
+              total: formatDisplayNumber(devices.length),
+            })}
           </span>
         )}
       </div>
@@ -381,7 +439,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
       {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2.5">
           <span className="text-sm font-medium">
-            {selectedIds.size} selected
+            {t('patchComplianceView.bulk.selected', { count: formatDisplayNumber(selectedIds.size) })}
           </span>
           <div className="h-4 w-px bg-border" />
           <button
@@ -391,7 +449,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
             className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
             {bulkAction === 'scan' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Scan
+            {t('patchComplianceView.actions.scan')}
           </button>
           {selectedWithPatches > 0 && !confirmInstall && (
             <button
@@ -401,26 +459,31 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               <Play className="h-3.5 w-3.5" />
-              Install ({selectedWithPatches})
+              {t('patchComplianceView.actions.installCount', { count: formatDisplayNumber(selectedWithPatches) })}
             </button>
           )}
           {confirmInstall && (
             <div className="flex items-center gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 px-3 py-1">
-              <span className="text-xs text-orange-700">Install patches on {selectedWithPatches} devices?</span>
+              <span className="text-xs text-orange-700">
+                {t('patchComplianceView.bulk.confirmInstall', {
+                  count: formatDisplayNumber(selectedWithPatches),
+                  deviceNoun: deviceNoun(selectedWithPatches),
+                })}
+              </span>
               <button
                 type="button"
                 onClick={() => { setConfirmInstall(false); void handleBulkInstall(selectedPatchDeviceIds); }}
                 disabled={bulkAction !== null}
                 className="inline-flex h-6 items-center rounded bg-primary px-2 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
-                {bulkAction === 'install' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Confirm'}
+                {bulkAction === 'install' ? <Loader2 className="h-3 w-3 animate-spin" /> : t('patchComplianceView.actions.confirm')}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmInstall(false)}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Cancel
+                {t('patchComplianceView.actions.cancel')}
               </button>
             </div>
           )}
@@ -429,7 +492,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
             onClick={clearSelection}
             className="ml-auto h-8 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
-            Clear
+            {t('patchComplianceView.actions.clear')}
           </button>
         </div>
       )}
@@ -456,32 +519,33 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                   type="button"
                   onClick={toggleSelectAll}
                   className="flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  aria-label={allSelected ? 'Deselect all' : 'Select all'}
+                  aria-label={allSelected ? t('patchComplianceView.selection.deselectAll') : t('patchComplianceView.selection.selectAll')}
                 >
                   {allSelected ? <CheckSquare className="h-4 w-4" /> : someSelected ? <Minus className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                 </button>
               </th>
-              <th className="px-3 py-3">Device</th>
-              <th className="px-3 py-3">Status</th>
-              <th className="px-3 py-3" title="Missing updates from Windows Update, Apple, or Linux package managers">OS Patches</th>
-              <th className="px-3 py-3" title="Missing updates from third-party or custom sources">3rd-Party</th>
-              <th className="px-3 py-3" title="Missing patches rated critical severity">Critical</th>
-              <th className="px-3 py-3" title="Most recent patch install or scan activity">Last Activity</th>
-              <th className="px-3 py-3" title="Device needs a reboot to complete patch installation">Reboot</th>
-              <th className="px-3 py-3 text-right">Actions</th>
+              <th className="px-3 py-3">{t('patchComplianceView.columns.device')}</th>
+              <th className="px-3 py-3">{t('patchComplianceView.columns.status')}</th>
+              <th className="px-3 py-3" title={t('patchComplianceView.tooltips.osPatches')}>{t('patchComplianceView.columns.osPatches')}</th>
+              <th className="px-3 py-3" title={t('patchComplianceView.tooltips.thirdParty')}>{t('patchComplianceView.columns.thirdParty')}</th>
+              <th className="px-3 py-3" title={t('patchComplianceView.tooltips.critical')}>{t('patchComplianceView.columns.critical')}</th>
+              <th className="px-3 py-3" title={t('patchComplianceView.tooltips.lastActivity')}>{t('patchComplianceView.columns.lastActivity')}</th>
+              <th className="px-3 py-3" title={t('patchComplianceView.tooltips.reboot')}>{t('patchComplianceView.columns.reboot')}</th>
+              <th className="px-3 py-3 text-right">{t('patchComplianceView.columns.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {filteredDevices.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  {hasActiveFilters ? 'No devices match your filters.' : 'No devices found.'}
+                  {hasActiveFilters ? t('patchComplianceView.empty.noFilterMatches') : t('patchComplianceView.empty.noDevices')}
                 </td>
               </tr>
             ) : (
               filteredDevices.map(device => {
                 const isSelected = selectedIds.has(device.id);
                 const isCompliant = device.pendingPatches === 0;
+                const activity = getLastActivity(device.lastInstalledAt, device.lastScannedAt);
 
                 return (
                   <tr key={device.id} className={cn('text-sm hover:bg-muted/30', isSelected && 'bg-primary/5')}>
@@ -490,7 +554,11 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                         type="button"
                         onClick={() => toggleSelect(device.id)}
                         className="flex items-center justify-center text-muted-foreground hover:text-foreground"
-                        aria-label={isSelected ? `Deselect ${device.hostname}` : `Select ${device.hostname}`}
+                        aria-label={
+                          isSelected
+                            ? t('patchComplianceView.selection.deselectDevice', { hostname: device.hostname })
+                            : t('patchComplianceView.selection.selectDevice', { hostname: device.hostname })
+                        }
                       >
                         {isSelected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
                       </button>
@@ -510,7 +578,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                           </a>
                           <div className="text-xs text-muted-foreground">
                             {device.osType}
-                            {device.lastSeenAt && <> &middot; {formatRelativeTime(device.lastSeenAt)}</>}
+                            {device.lastSeenAt && <> &middot; {formatRelative(device.lastSeenAt)}</>}
                           </div>
                         </div>
                       </div>
@@ -518,15 +586,15 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                     <td className="px-3 py-2.5">
                       {isCompliant ? (
                         <span className="inline-flex items-center rounded-full border border-green-500/40 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700">
-                          OK
+                          {t('patchComplianceView.status.ok')}
                         </span>
                       ) : device.criticalMissing > 0 ? (
                         <span className="inline-flex items-center rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700">
-                          {device.pendingPatches} missing
+                          {t('patchComplianceView.status.missing', { count: formatDisplayNumber(device.pendingPatches) })}
                         </span>
                       ) : (
                         <span className="inline-flex items-center rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-700">
-                          {device.pendingPatches} missing
+                          {t('patchComplianceView.status.missing', { count: formatDisplayNumber(device.pendingPatches) })}
                         </span>
                       )}
                     </td>
@@ -551,14 +619,14 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground" title={lastActivity(device.lastInstalledAt, device.lastScannedAt).tooltip}>
-                      {lastActivity(device.lastInstalledAt, device.lastScannedAt).label}
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground" title={activity.tooltip}>
+                      {activity.label}
                     </td>
                     <td className="px-3 py-2.5">
                       {device.pendingReboot ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-700">
                           <RotateCcw className="h-3 w-3" />
-                          Yes
+                          {t('patchComplianceView.status.yes')}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -569,7 +637,7 @@ export default function PatchComplianceView({ ringId }: PatchComplianceViewProps
                         href={`/devices/${device.id}#patches`}
                         className="inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium hover:bg-muted"
                       >
-                        View
+                        {t('patchComplianceView.actions.view')}
                       </a>
                     </td>
                   </tr>

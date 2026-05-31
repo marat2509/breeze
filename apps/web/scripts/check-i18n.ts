@@ -113,6 +113,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/MacOSPermissionsCard.tsx',
   'src/components/devices/ScriptPickerModal.tsx',
   'src/components/patches/PatchApprovalModal.tsx',
+  'src/components/patches/PatchComplianceView.tsx',
   'src/components/patches/PatchInstallHistory.tsx',
   'src/components/patches/PatchList.tsx',
   'src/components/patches/PatchesPage.tsx',
