@@ -8,6 +8,10 @@ import {
   Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDate as formatLocalizedDate, formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
+import type { TranslationParams } from '@/i18n/resources';
 
 export type UpdateRingStatus = 'active' | 'disabled';
 
@@ -41,14 +45,19 @@ type UpdateRingListProps = {
   pageSize?: number;
 };
 
-function formatDate(dateString?: string): string {
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
+
+function formatDate(dateString: string | undefined, locale: Locale): string {
   if (!dateString) return '\u2014';
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleDateString();
+  return formatLocalizedDate(dateString, locale);
 }
 
-function ComplianceBadge({ percent }: { percent?: number }) {
+function formatDays(value: number | null | undefined, locale: Locale, t: Translate): string {
+  if (value == null || value === 0) return t('updateRingList.none');
+  return t('updateRingList.days', { count: formatNumber(value, locale) });
+}
+
+function ComplianceBadge({ percent, locale }: { percent?: number; locale: Locale }) {
   if (percent === undefined) return <span className="text-muted-foreground">{"\u2014"}</span>;
 
   const color =
@@ -65,7 +74,7 @@ function ComplianceBadge({ percent }: { percent?: number }) {
         color
       )}
     >
-      {percent}%
+      {formatNumber(percent, locale)}%
     </span>
   );
 }
@@ -77,6 +86,7 @@ export default function UpdateRingList({
   onSelect,
   pageSize = 8,
 }: UpdateRingListProps) {
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -101,9 +111,12 @@ export default function UpdateRingList({
         <div className="flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold">Update Rings</h2>
+            <h2 className="text-lg font-semibold">{t('updateRingList.title')}</h2>
             <p className="text-sm text-muted-foreground">
-              {filteredRings.length} of {rings.length} rings
+              {t('updateRingList.summary', {
+                filtered: formatNumber(filteredRings.length, locale),
+                total: formatNumber(rings.length, locale),
+              })}
             </p>
           </div>
         </div>
@@ -111,7 +124,7 @@ export default function UpdateRingList({
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
-            placeholder="Search rings..."
+            placeholder={t('updateRingList.searchPlaceholder')}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -126,14 +139,14 @@ export default function UpdateRingList({
         <table className="min-w-full divide-y">
           <thead className="bg-muted/40">
             <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3">Order</th>
-              <th className="px-4 py-3">Ring</th>
-              <th className="px-4 py-3">Deferral</th>
-              <th className="px-4 py-3">Deadline</th>
-              <th className="px-4 py-3">Devices</th>
-              <th className="px-4 py-3">Compliance</th>
-              <th className="px-4 py-3">Updated</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.order')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.ring')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.deferral')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.deadline')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.devices')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.compliance')}</th>
+              <th className="px-4 py-3">{t('updateRingList.columns.updated')}</th>
+              <th className="px-4 py-3 text-right">{t('updateRingList.columns.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -143,7 +156,7 @@ export default function UpdateRingList({
                   colSpan={8}
                   className="px-4 py-6 text-center text-sm text-muted-foreground"
                 >
-                  No update rings found.
+                  {t('updateRingList.empty')}
                 </td>
               </tr>
             ) : (
@@ -151,7 +164,7 @@ export default function UpdateRingList({
                 <tr key={ring.id} className="text-sm">
                   <td className="px-4 py-3">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                      {ring.ringOrder}
+                      {formatNumber(ring.ringOrder, locale)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -171,25 +184,26 @@ export default function UpdateRingList({
                     </button>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {ring.deferralDays === 0 ? 'None' : `${ring.deferralDays} days`}
+                    {formatDays(ring.deferralDays, locale, t)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {ring.deadlineDays == null ? 'None' : `${ring.deadlineDays} days`}
+                    {formatDays(ring.deadlineDays, locale, t)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {ring.deviceCount ?? '\u2014'}
+                    {ring.deviceCount == null ? '\u2014' : formatNumber(ring.deviceCount, locale)}
                   </td>
                   <td className="px-4 py-3">
-                    <ComplianceBadge percent={ring.compliancePercent} />
+                    <ComplianceBadge percent={ring.compliancePercent} locale={locale} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {formatDate(ring.updatedAt)}
+                    {formatDate(ring.updatedAt, locale)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => onEdit?.(ring)}
+                        aria-label={t('updateRingList.actions.edit', { name: ring.name })}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border hover:bg-muted"
                       >
                         <Pencil className="h-4 w-4" />
@@ -197,6 +211,7 @@ export default function UpdateRingList({
                       <button
                         type="button"
                         onClick={() => onDelete?.(ring)}
+                        aria-label={t('updateRingList.actions.delete', { name: ring.name })}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -213,7 +228,10 @@ export default function UpdateRingList({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Page {currentPage} of {totalPages}
+            {t('updateRingList.pagination.page', {
+              page: formatNumber(currentPage, locale),
+              totalPages: formatNumber(totalPages, locale),
+            })}
           </span>
           <div className="flex items-center gap-2">
             <button

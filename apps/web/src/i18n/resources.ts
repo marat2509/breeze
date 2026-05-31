@@ -2136,6 +2136,31 @@ export const resources = {
       allRings: 'All Rings',
       ringOption: '{{name}} (Order {{order}}, +{{days}}d)',
     },
+    updateRingList: {
+      title: 'Update Rings',
+      summary: '{{filtered}} of {{total}} rings',
+      searchPlaceholder: 'Search rings...',
+      none: 'None',
+      days: '{{count}} days',
+      columns: {
+        order: 'Order',
+        ring: 'Ring',
+        deferral: 'Deferral',
+        deadline: 'Deadline',
+        devices: 'Devices',
+        compliance: 'Compliance',
+        updated: 'Updated',
+        actions: 'Actions',
+      },
+      actions: {
+        edit: 'Edit {{name}}',
+        delete: 'Delete {{name}}',
+      },
+      empty: 'No update rings found.',
+      pagination: {
+        page: 'Page {{page}} of {{totalPages}}',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -4740,6 +4765,31 @@ export const resources = {
       label: 'Кольцо обновлений:',
       allRings: 'Все кольца',
       ringOption: '{{name}} (Порядок {{order}}, +{{days}} дн.)',
+    },
+    updateRingList: {
+      title: 'Кольца обновлений',
+      summary: '{{filtered}} из {{total}} колец',
+      searchPlaceholder: 'Поиск колец...',
+      none: 'Нет',
+      days: '{{count}} дн.',
+      columns: {
+        order: 'Порядок',
+        ring: 'Кольцо',
+        deferral: 'Отсрочка',
+        deadline: 'Крайний срок',
+        devices: 'Устройства',
+        compliance: 'Соответствие',
+        updated: 'Обновлено',
+        actions: 'Действия',
+      },
+      actions: {
+        edit: 'Редактировать {{name}}',
+        delete: 'Удалить {{name}}',
+      },
+      empty: 'Кольца обновлений не найдены.',
+      pagination: {
+        page: 'Страница {{page}} из {{totalPages}}',
+      },
     },
     scripts: {
       picker: {
