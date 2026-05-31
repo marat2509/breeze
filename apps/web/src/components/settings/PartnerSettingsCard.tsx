@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import { useOrgStore } from '../../stores/orgStore';
+import { useI18n } from '@/i18n/react';
 
 export default function PartnerSettingsCard() {
+  const { t } = useI18n();
   const { currentPartnerId, isLoading } = useOrgStore();
   const [mounted, setMounted] = useState(false);
 
@@ -25,9 +27,9 @@ export default function PartnerSettingsCard() {
           <Building2 className="h-6 w-6 text-primary" />
         </div>
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Partner Settings</h2>
+          <h2 className="text-lg font-semibold">{t('partnerSettings.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            Configure MSP defaults, business hours, and contact information.
+            {t('settings.index.partnerDescription')}
           </p>
         </div>
       </div>

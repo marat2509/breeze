@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchWithAuth } from '../../stores/auth';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
 
 interface ConnectedApp {
   client_id: string;
@@ -14,13 +16,14 @@ type Status =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; apps: ConnectedApp[] };
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return 'Never';
+function formatDate(value: string | null | undefined, locale: Locale, neverLabel: string): string {
+  if (!value) return neverLabel;
   const d = new Date(value);
-  return Number.isNaN(d.valueOf()) ? '—' : d.toLocaleString();
+  return Number.isNaN(d.valueOf()) ? '—' : d.toLocaleString(locale);
 }
 
 export default function ConnectedAppsList() {
+  const { locale, t } = useI18n();
   const [status, setStatus] = useState<Status>({ kind: 'loading' });
   const [revoking, setRevoking] = useState<string | null>(null);
 
@@ -34,47 +37,45 @@ export default function ConnectedAppsList() {
         return;
       }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setStatus({ kind: 'error', message: body?.message ?? `Request failed (${res.status})` });
+        setStatus({ kind: 'error', message: t('account.common.requestFailed', { status: String(res.status) }) });
         return;
       }
       const body = (await res.json()) as { clients: ConnectedApp[] };
       setStatus({ kind: 'ready', apps: body.clients ?? [] });
-    } catch (err) {
-      setStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Network error' });
+    } catch {
+      setStatus({ kind: 'error', message: t('account.common.networkError') });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const revoke = async (app: ConnectedApp) => {
-    if (!window.confirm(`Revoke access for ${app.client_name}? Their access token will stop working within 10 minutes.`)) return;
+    if (!window.confirm(t('settings.connectedApps.revokeConfirm', { app: app.client_name }))) return;
     setRevoking(app.client_id);
     try {
       const res = await fetchWithAuth(`/settings/connected-apps/${encodeURIComponent(app.client_id)}`, {
         method: 'DELETE',
       });
       if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        setStatus({ kind: 'error', message: body?.message ?? `Revoke failed (${res.status})` });
+        setStatus({ kind: 'error', message: t('account.connectedApps.errors.revokeFailed', { status: String(res.status) }) });
         return;
       }
       await load();
-    } catch (err) {
-      setStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Network error during revoke' });
+    } catch {
+      setStatus({ kind: 'error', message: t('account.connectedApps.errors.revokeNetwork') });
     } finally {
       setRevoking(null);
     }
   };
 
   if (status.kind === 'loading') {
-    return <p className="text-sm text-muted-foreground">Loading connected apps…</p>;
+    return <p className="text-sm text-muted-foreground">{t('settings.connectedApps.loading')}</p>;
   }
 
   if (status.kind === 'unauthenticated') {
-    return <p className="text-sm text-muted-foreground">Redirecting to sign in…</p>;
+    return <p className="text-sm text-muted-foreground">{t('settings.connectedApps.redirecting')}</p>;
   }
 
   if (status.kind === 'error') {
@@ -88,10 +89,9 @@ export default function ConnectedAppsList() {
   if (status.apps.length === 0) {
     return (
       <div className="rounded-md border border-dashed bg-muted/30 p-8 text-center">
-        <p className="text-sm font-medium">No connected apps yet</p>
+        <p className="text-sm font-medium">{t('settings.connectedApps.emptyTitle')}</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          When someone authorizes an MCP client (Claude.ai, ChatGPT, Cursor, …) against your tenant,
-          it will appear here so you can revoke access at any time.
+          {t('settings.connectedApps.emptyDescription')}
         </p>
       </div>
     );
@@ -102,11 +102,11 @@ export default function ConnectedAppsList() {
       <table className="w-full text-sm">
         <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
-            <th className="px-4 py-2.5 font-medium">App</th>
-            <th className="px-4 py-2.5 font-medium">Registered</th>
-            <th className="px-4 py-2.5 font-medium">Last used</th>
+            <th className="px-4 py-2.5 font-medium">{t('settings.connectedApps.app')}</th>
+            <th className="px-4 py-2.5 font-medium">{t('settings.connectedApps.registered')}</th>
+            <th className="px-4 py-2.5 font-medium">{t('account.connectedApps.lastUsed')}</th>
             <th className="px-4 py-2.5 text-right font-medium">
-              <span className="sr-only">Actions</span>
+              <span className="sr-only">{t('settings.connectedApps.actions')}</span>
             </th>
           </tr>
         </thead>
@@ -119,8 +119,12 @@ export default function ConnectedAppsList() {
                   <div className="font-medium">{app.client_name}</div>
                   <div className="text-xs text-muted-foreground">{app.client_id}</div>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(app.created_at)}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(app.last_used_at)}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {formatDate(app.created_at, locale, t('settings.connectedApps.never'))}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {formatDate(app.last_used_at, locale, t('settings.connectedApps.never'))}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
@@ -128,7 +132,7 @@ export default function ConnectedAppsList() {
                     disabled={isBusy}
                     className="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-transparent px-3 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isBusy ? 'Revoking…' : 'Revoke'}
+                    {isBusy ? t('account.common.revoking') : t('account.common.revoke')}
                   </button>
                 </td>
               </tr>
