@@ -12,13 +12,16 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  X,
   XCircle,
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatDate as formatLocalizedDate, formatNumber, formatRelativeTime as formatLocalizedRelativeTime } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 type PatchResult = {
   id?: string;
@@ -59,86 +62,87 @@ type PatchInstallHistoryProps = {
 const PAGE_SIZE = 15;
 const POLL_INTERVAL_MS = 30000;
 
-const typeConfig: Record<string, { label: string; icon: typeof Download }> = {
-  install_patches: { label: 'Install', icon: Download },
-  install: { label: 'Install', icon: Download },
-  patch_scan: { label: 'Scan', icon: Search },
-  scan_patches: { label: 'Scan', icon: Search },
-  scan: { label: 'Scan', icon: Search },
-  rollback_patches: { label: 'Rollback', icon: RotateCcw },
-  rollback: { label: 'Rollback', icon: RotateCcw },
-  download_patches: { label: 'Download', icon: Download },
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
+
+type TypeConfig = { label: string; icon: typeof Download };
+type StatusConfig = { label: string; color: string; icon: typeof CheckCircle };
+
+const typeConfig: Record<string, { labelKey: string; icon: typeof Download }> = {
+  install_patches: { labelKey: 'patchInstallHistory.types.install', icon: Download },
+  install: { labelKey: 'patchInstallHistory.types.install', icon: Download },
+  patch_scan: { labelKey: 'patchInstallHistory.types.scan', icon: Search },
+  scan_patches: { labelKey: 'patchInstallHistory.types.scan', icon: Search },
+  scan: { labelKey: 'patchInstallHistory.types.scan', icon: Search },
+  rollback_patches: { labelKey: 'patchInstallHistory.types.rollback', icon: RotateCcw },
+  rollback: { labelKey: 'patchInstallHistory.types.rollback', icon: RotateCcw },
+  download_patches: { labelKey: 'patchInstallHistory.types.download', icon: Download },
 };
 
-const statusConfig: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
+const statusConfig: Record<string, { labelKey: string; color: string; icon: typeof CheckCircle }> = {
   completed: {
-    label: 'Completed',
+    labelKey: 'patchInstallHistory.status.completed',
     color: 'bg-success/15 text-success border-success/30',
     icon: CheckCircle,
   },
   failed: {
-    label: 'Failed',
+    labelKey: 'patchInstallHistory.status.failed',
     color: 'bg-destructive/15 text-destructive border-destructive/30',
     icon: XCircle,
   },
   pending: {
-    label: 'Pending',
+    labelKey: 'patchInstallHistory.status.pending',
     color: 'bg-warning/15 text-warning border-warning/30',
     icon: Clock,
   },
   running: {
-    label: 'Running',
+    labelKey: 'patchInstallHistory.status.running',
     color: 'bg-blue-500/20 text-blue-700 border-blue-500/40',
     icon: Loader2,
   },
   timeout: {
-    label: 'Timeout',
+    labelKey: 'patchInstallHistory.status.timeout',
     color: 'bg-warning/15 text-warning border-warning/30',
     icon: AlertTriangle,
   },
 };
 
-function getTypeConfig(type: string) {
+function getTypeConfig(type: string, t: Translate): TypeConfig {
   const normalized = type.toLowerCase();
-  return typeConfig[normalized] ?? { label: type, icon: Download };
+  const config = typeConfig[normalized];
+  return config ? { label: t(config.labelKey), icon: config.icon } : { label: type, icon: Download };
 }
 
-function getStatusConfig(status: string) {
+function getStatusConfig(status: string, t: Translate): StatusConfig {
   const normalized = status.toLowerCase();
-  return statusConfig[normalized] ?? statusConfig.pending;
+  const config = statusConfig[normalized] ?? statusConfig.pending;
+  return { label: t(config.labelKey), color: config.color, icon: config.icon };
 }
 
-function formatDuration(createdAt?: string, completedAt?: string): string {
+function formatDuration(createdAt: string | undefined, completedAt: string | undefined, t: Translate): string {
   if (!createdAt || !completedAt) return '--';
   const start = new Date(createdAt).getTime();
   const end = new Date(completedAt).getTime();
   if (Number.isNaN(start) || Number.isNaN(end)) return '--';
   const totalSeconds = Math.max(0, Math.round((end - start) / 1000));
-  if (totalSeconds < 1) return '<1s';
-  if (totalSeconds < 60) return `${totalSeconds}s`;
+  if (totalSeconds < 1) return t('patchInstallHistory.duration.lessThanSecond');
+  if (totalSeconds < 60) return t('patchInstallHistory.duration.seconds', { seconds: totalSeconds });
   const minutes = Math.floor(totalSeconds / 60);
   const remaining = totalSeconds % 60;
-  return `${minutes}m ${remaining}s`;
+  return t('patchInstallHistory.duration.minutesSeconds', { minutes, seconds: remaining });
 }
 
-function formatRelativeTime(dateString?: string): string {
+function formatHistoryRelativeTime(dateString: string | undefined, locale: Locale): string {
   if (!dateString) return '--';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
+  return formatLocalizedRelativeTime(date, locale);
+}
 
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-
-  return date.toLocaleDateString('en-US', {
+function formatAbsoluteDate(dateString: string | undefined, locale: Locale): string {
+  if (!dateString) return '--';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return formatLocalizedDate(date, locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -147,20 +151,7 @@ function formatRelativeTime(dateString?: string): string {
   });
 }
 
-function formatAbsoluteDate(dateString?: string): string {
-  if (!dateString) return '--';
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function getPatchCount(entry: PatchHistoryEntry): string {
+function getPatchCount(entry: PatchHistoryEntry, locale: Locale): string {
   const result = entry.result;
   if (!result) return '--';
 
@@ -169,21 +160,21 @@ function getPatchCount(entry: PatchHistoryEntry): string {
   const total = installed + failed;
 
   if (result.results && result.results.length > 0) {
-    return String(result.results.length);
+    return formatNumber(result.results.length, locale);
   }
 
-  if (total > 0) return String(total);
-  if (result.scannedCount != null) return String(result.scannedCount);
-  if (result.pendingCount != null) return String(result.pendingCount);
+  if (total > 0) return formatNumber(total, locale);
+  if (result.scannedCount != null) return formatNumber(result.scannedCount, locale);
+  if (result.pendingCount != null) return formatNumber(result.pendingCount, locale);
 
   return '--';
 }
 
-function getPatchResultName(patch: PatchResult): string {
+function getPatchResultName(patch: PatchResult, t: Translate): string {
   if (patch.name || patch.title) return patch.name || patch.title || '';
   if (patch.kb) return patch.kb.toUpperCase().startsWith('KB') ? patch.kb : `KB${patch.kb}`;
   if (patch.installId) return patch.installId;
-  return 'Unknown patch';
+  return t('patchInstallHistory.placeholders.unknownPatch');
 }
 
 function getPatchResultKb(patch: PatchResult): string | null {
@@ -197,6 +188,7 @@ function getPatchResultKb(patch: PatchResult): string | null {
 }
 
 export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryProps) {
+  const { locale, t } = useI18n();
   const [history, setHistory] = useState<PatchHistoryEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -233,7 +225,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
             void navigateTo('/login', { replace: true });
             return;
           }
-          throw new Error('Failed to fetch patch history');
+          throw new Error(t('patchInstallHistory.errors.fetch'));
         }
         const json = await response.json();
         const data = json?.data ?? json;
@@ -243,12 +235,12 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
         setHistory(entries);
         setTotal(typeof data?.total === 'number' ? data.total : entries.length);
       } catch (err) {
-        if (!silent) setError(err instanceof Error ? err.message : 'Failed to fetch patch history');
+        if (!silent) setError(err instanceof Error ? err.message : t('patchInstallHistory.errors.fetch'));
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [deviceId, currentPage, typeFilter, statusFilter]
+    [deviceId, currentPage, typeFilter, statusFilter, t]
   );
 
   useEffect(() => {
@@ -269,7 +261,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading patch history...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('patchInstallHistory.loading')}</p>
         </div>
       </div>
     );
@@ -286,7 +278,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
           }}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('patchInstallHistory.actions.retry')}
         </button>
       </div>
     );
@@ -298,9 +290,11 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
         <div className="flex items-center gap-2">
           <History className="h-4 w-4 text-muted-foreground" />
           <div>
-            <h3 className="text-lg font-semibold">Patch Operation History</h3>
+            <h3 className="text-lg font-semibold">{t('patchInstallHistory.title')}</h3>
             <p className="text-sm text-muted-foreground">
-              {total} operation{total !== 1 ? 's' : ''}
+              {t(total === 1 ? 'patchInstallHistory.operationCountOne' : 'patchInstallHistory.operationCountMany', {
+                count: formatNumber(total, locale),
+              })}
             </p>
           </div>
         </div>
@@ -313,10 +307,10 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Types</option>
-            <option value="install">Install</option>
-            <option value="scan">Scan</option>
-            <option value="rollback">Rollback</option>
+            <option value="all">{t('patchInstallHistory.filters.allTypes')}</option>
+            <option value="install">{t('patchInstallHistory.types.install')}</option>
+            <option value="scan">{t('patchInstallHistory.types.scan')}</option>
+            <option value="rollback">{t('patchInstallHistory.types.rollback')}</option>
           </select>
           <select
             value={statusFilter}
@@ -326,11 +320,11 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Status</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="pending">Pending</option>
-            <option value="timeout">Timeout</option>
+            <option value="all">{t('patchInstallHistory.filters.allStatus')}</option>
+            <option value="completed">{t('patchInstallHistory.status.completed')}</option>
+            <option value="failed">{t('patchInstallHistory.status.failed')}</option>
+            <option value="pending">{t('patchInstallHistory.status.pending')}</option>
+            <option value="timeout">{t('patchInstallHistory.status.timeout')}</option>
           </select>
           <button
             type="button"
@@ -343,7 +337,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
             className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            {refreshing ? t('patchInstallHistory.actions.refreshing') : t('patchInstallHistory.actions.refresh')}
           </button>
         </div>
       </div>
@@ -352,11 +346,11 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
         <table className="min-w-full divide-y">
           <thead className="bg-muted/40">
             <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3">Operation</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Patches</th>
-              <th className="px-4 py-3">Duration</th>
-              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">{t('patchInstallHistory.columns.operation')}</th>
+              <th className="px-4 py-3">{t('patchInstallHistory.columns.status')}</th>
+              <th className="px-4 py-3">{t('patchInstallHistory.columns.patches')}</th>
+              <th className="px-4 py-3">{t('patchInstallHistory.columns.duration')}</th>
+              <th className="px-4 py-3">{t('patchInstallHistory.columns.date')}</th>
               <th className="px-4 py-3 w-10" />
             </tr>
           </thead>
@@ -366,7 +360,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
                 <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   <div className="flex flex-col items-center gap-2">
                     <History className="h-8 w-8 text-muted-foreground/50" />
-                    <p>No patch operations found.</p>
+                    <p>{t('patchInstallHistory.empty')}</p>
                     {(typeFilter !== 'all' || statusFilter !== 'all') && (
                       <button
                         type="button"
@@ -377,7 +371,7 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
                         }}
                         className="text-primary hover:underline"
                       >
-                        Clear filters
+                        {t('patchInstallHistory.actions.clearFilters')}
                       </button>
                     )}
                   </div>
@@ -385,9 +379,9 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
               </tr>
             ) : (
               history.map(entry => {
-                const typeConf = getTypeConfig(entry.type);
+                const typeConf = getTypeConfig(entry.type, t);
                 const TypeIcon = typeConf.icon;
-                const statusConf = getStatusConfig(entry.status);
+                const statusConf = getStatusConfig(entry.status, t);
                 const StatusIcon = statusConf.icon;
                 const isExpanded = expandedId === entry.id;
 
@@ -401,6 +395,8 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
                     StatusIcon={StatusIcon}
                     isExpanded={isExpanded}
                     onToggle={() => setExpandedId(isExpanded ? null : entry.id)}
+                    locale={locale}
+                    t={t}
                   />
                 );
               })
@@ -412,8 +408,11 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Showing {(currentPage - 1) * PAGE_SIZE + 1} to{' '}
-            {Math.min(currentPage * PAGE_SIZE, total)} of {total}
+            {t('patchInstallHistory.pagination.showing', {
+              from: formatNumber((currentPage - 1) * PAGE_SIZE + 1, locale),
+              to: formatNumber(Math.min(currentPage * PAGE_SIZE, total), locale),
+              total: formatNumber(total, locale),
+            })}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -425,7 +424,10 @@ export default function PatchInstallHistory({ deviceId }: PatchInstallHistoryPro
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span>
-              Page {currentPage} of {totalPages}
+              {t('patchInstallHistory.pagination.page', {
+                page: formatNumber(currentPage, locale),
+                totalPages: formatNumber(totalPages, locale),
+              })}
             </span>
             <button
               type="button"
@@ -450,19 +452,23 @@ function HistoryRow({
   StatusIcon,
   isExpanded,
   onToggle,
+  locale,
+  t,
 }: {
   entry: PatchHistoryEntry;
-  typeConf: { label: string; icon: typeof Download };
+  typeConf: TypeConfig;
   TypeIcon: typeof Download;
-  statusConf: { label: string; color: string; icon: typeof CheckCircle };
+  statusConf: StatusConfig;
   StatusIcon: typeof CheckCircle;
   isExpanded: boolean;
   onToggle: () => void;
+  locale: Locale;
+  t: Translate;
 }) {
-  const patchCount = getPatchCount(entry);
-  const duration = formatDuration(entry.createdAt, entry.completedAt);
-  const relDate = formatRelativeTime(entry.createdAt);
-  const absDate = formatAbsoluteDate(entry.createdAt);
+  const patchCount = getPatchCount(entry, locale);
+  const duration = formatDuration(entry.createdAt, entry.completedAt, t);
+  const relDate = formatHistoryRelativeTime(entry.createdAt, locale);
+  const absDate = formatAbsoluteDate(entry.createdAt, locale);
   const isRunning = entry.status === 'running' || entry.status === 'pending';
 
   return (
@@ -498,7 +504,7 @@ function HistoryRow({
           {isRunning ? (
             <span className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Running...
+              {t('patchInstallHistory.status.runningEllipsis')}
             </span>
           ) : (
             duration
@@ -519,7 +525,7 @@ function HistoryRow({
       {isExpanded && (
         <tr>
           <td colSpan={6} className="px-0 py-0">
-            <HistoryDetail entry={entry} />
+            <HistoryDetail entry={entry} locale={locale} t={t} />
           </td>
         </tr>
       )}
@@ -527,7 +533,7 @@ function HistoryRow({
   );
 }
 
-function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
+function HistoryDetail({ entry, locale, t }: { entry: PatchHistoryEntry; locale: Locale; t: Translate }) {
   const result = entry.result;
   const type = entry.type.toLowerCase();
   const isScan = type.includes('scan');
@@ -538,42 +544,42 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {result?.installedCount != null && (
           <div className="rounded-md border bg-card p-3">
-            <p className="text-xs font-medium text-muted-foreground">Installed</p>
-            <p className="text-lg font-semibold text-green-700">{result.installedCount}</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.installed')}</p>
+            <p className="text-lg font-semibold text-green-700">{formatNumber(result.installedCount, locale)}</p>
           </div>
         )}
         {result?.failedCount != null && (
           <div className="rounded-md border bg-card p-3">
-            <p className="text-xs font-medium text-muted-foreground">Failed</p>
-            <p className="text-lg font-semibold text-red-700">{result.failedCount}</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.failed')}</p>
+            <p className="text-lg font-semibold text-red-700">{formatNumber(result.failedCount, locale)}</p>
           </div>
         )}
         {isScan && result?.pendingCount != null && (
           <div className="rounded-md border bg-card p-3">
-            <p className="text-xs font-medium text-muted-foreground">Pending</p>
-            <p className="text-lg font-semibold text-yellow-700">{result.pendingCount}</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.pending')}</p>
+            <p className="text-lg font-semibold text-yellow-700">{formatNumber(result.pendingCount, locale)}</p>
           </div>
         )}
         {isScan && result?.scannedCount != null && (
           <div className="rounded-md border bg-card p-3">
-            <p className="text-xs font-medium text-muted-foreground">Scanned</p>
-            <p className="text-lg font-semibold">{result.scannedCount}</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.scanned')}</p>
+            <p className="text-lg font-semibold">{formatNumber(result.scannedCount, locale)}</p>
           </div>
         )}
         {result?.rebootRequired && (
           <div className="rounded-md border border-yellow-400/50 bg-yellow-500/10 p-3">
-            <p className="text-xs font-medium text-yellow-700">Reboot Required</p>
-            <p className="text-sm font-medium text-yellow-800">Yes</p>
+            <p className="text-xs font-medium text-yellow-700">{t('patchInstallHistory.summary.rebootRequired')}</p>
+            <p className="text-sm font-medium text-yellow-800">{t('patchInstallHistory.summary.yes')}</p>
           </div>
         )}
         <div className="rounded-md border bg-card p-3">
-          <p className="text-xs font-medium text-muted-foreground">Started</p>
-          <p className="text-sm font-medium">{formatAbsoluteDate(entry.createdAt)}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.started')}</p>
+          <p className="text-sm font-medium">{formatAbsoluteDate(entry.createdAt, locale)}</p>
         </div>
         {entry.completedAt && (
           <div className="rounded-md border bg-card p-3">
-            <p className="text-xs font-medium text-muted-foreground">Completed</p>
-            <p className="text-sm font-medium">{formatAbsoluteDate(entry.completedAt)}</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('patchInstallHistory.summary.completed')}</p>
+            <p className="text-sm font-medium">{formatAbsoluteDate(entry.completedAt, locale)}</p>
           </div>
         )}
       </div>
@@ -581,7 +587,7 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
       {/* Error message */}
       {(entry.status === 'failed' || entry.status === 'timeout') && result?.errorMessage && (
         <div className="rounded-md border border-red-500/40 bg-red-500/5 p-4">
-          <p className="text-xs font-semibold text-red-700 mb-1">Error</p>
+          <p className="text-xs font-semibold text-red-700 mb-1">{t('patchInstallHistory.columns.error')}</p>
           <p className="text-sm text-red-800 whitespace-pre-wrap">{result.errorMessage}</p>
         </div>
       )}
@@ -589,16 +595,16 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
       {/* Individual patch results */}
       {result?.results && result.results.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold mb-2">Patch Results</h4>
+          <h4 className="text-sm font-semibold mb-2">{t('patchInstallHistory.detail.patchResults')}</h4>
           <div className="overflow-hidden rounded-md border">
             <div className="max-h-64 overflow-y-auto">
               <table className="min-w-full divide-y">
                 <thead className="bg-muted/40 sticky top-0">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-2">Patch</th>
+                    <th className="px-4 py-2">{t('patchInstallHistory.columns.patch')}</th>
                     <th className="px-4 py-2">KB</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2">Error</th>
+                    <th className="px-4 py-2">{t('patchInstallHistory.columns.status')}</th>
+                    <th className="px-4 py-2">{t('patchInstallHistory.columns.error')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -610,7 +616,7 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
 
                     return (
                       <tr key={patch.id ?? patch.installId ?? index} className="text-sm">
-                        <td className="px-4 py-2 font-medium">{getPatchResultName(patch)}</td>
+                        <td className="px-4 py-2 font-medium">{getPatchResultName(patch, t)}</td>
                         <td className="px-4 py-2 text-xs text-muted-foreground">
                           {kb ? (
                             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
@@ -624,21 +630,21 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
                           {isInstalled ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-success/15 border border-success/30 px-2 py-0.5 text-xs font-medium text-success">
                               <CheckCircle className="h-3 w-3" />
-                              Installed
+                              {t('patchInstallHistory.patchStatus.installed')}
                             </span>
                           ) : isFailed ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-xs font-medium text-destructive">
                               <XCircle className="h-3 w-3" />
-                              Failed
+                              {t('patchInstallHistory.patchStatus.failed')}
                             </span>
                           ) : (
                             <span className="inline-flex items-center rounded-full bg-muted/40 border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              {patch.status || 'Unknown'}
+                              {patch.status || t('patchInstallHistory.status.unknown')}
                             </span>
                           )}
                           {patch.rebootRequired && (
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
-                              Reboot
+                              {t('patchInstallHistory.patchStatus.reboot')}
                             </span>
                           )}
                         </td>
@@ -663,7 +669,7 @@ function HistoryDetail({ entry }: { entry: PatchHistoryEntry }) {
 
       {/* No detailed results */}
       {(!result?.results || result.results.length === 0) && !result?.errorMessage && (
-        <p className="text-sm text-muted-foreground italic">No detailed patch results available.</p>
+        <p className="text-sm text-muted-foreground italic">{t('patchInstallHistory.detail.empty')}</p>
       )}
     </div>
   );

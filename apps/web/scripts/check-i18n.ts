@@ -112,6 +112,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/MacOSPermissionsBanner.tsx',
   'src/components/devices/MacOSPermissionsCard.tsx',
   'src/components/devices/ScriptPickerModal.tsx',
+  'src/components/patches/PatchInstallHistory.tsx',
   'src/components/filters/ConditionGroup.tsx',
   'src/components/filters/ConditionRow.tsx',
   'src/components/filters/DeviceFilterBar.tsx',
