@@ -1,11 +1,22 @@
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+
 type Source = 'all' | 'microsoft' | 'apple' | 'linux' | 'third_party';
 
-const labels: Record<Source, string> = {
+const fallbackLabels: Record<Source, string> = {
   all: 'All',
   microsoft: 'Microsoft',
   apple: 'Apple',
   linux: 'Linux',
   third_party: 'Third-party',
+};
+
+const labelKeys: Record<Source, string> = {
+  all: 'sourceFilterChips.labels.all',
+  microsoft: 'sourceFilterChips.labels.microsoft',
+  apple: 'sourceFilterChips.labels.apple',
+  linux: 'sourceFilterChips.labels.linux',
+  third_party: 'sourceFilterChips.labels.thirdParty',
 };
 
 const order: Source[] = ['all', 'microsoft', 'apple', 'linux', 'third_party'];
@@ -17,6 +28,7 @@ interface Props {
 }
 
 export default function SourceFilterChips({ counts, value, onChange }: Props) {
+  const { locale, t } = useI18n();
   const total =
     (counts.microsoft ?? 0) +
     (counts.apple ?? 0) +
@@ -29,6 +41,7 @@ export default function SourceFilterChips({ counts, value, onChange }: Props) {
       {order.map((source) => {
         const count = source === 'all' ? total : counts[source] ?? 0;
         const active = value === source;
+        const label = t(labelKeys[source], undefined, fallbackLabels[source]);
         return (
           <button
             key={source}
@@ -40,9 +53,9 @@ export default function SourceFilterChips({ counts, value, onChange }: Props) {
                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
             }`}
           >
-            {labels[source]}{' '}
+            {label}{' '}
             <span data-testid={`patches-count-${source}`} className="ml-1 opacity-80">
-              {count}
+              {formatNumber(count, locale)}
             </span>
           </button>
         );

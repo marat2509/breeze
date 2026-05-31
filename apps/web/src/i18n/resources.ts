@@ -2054,6 +2054,15 @@ export const resources = {
         updateFailed: 'Failed to update patch approval',
       },
     },
+    sourceFilterChips: {
+      labels: {
+        all: 'All',
+        microsoft: 'Microsoft',
+        apple: 'Apple',
+        linux: 'Linux',
+        thirdParty: 'Third-party',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -4575,6 +4584,15 @@ export const resources = {
       errors: {
         deferUntilRequired: 'Выберите, до какого времени отложить патч',
         updateFailed: 'Не удалось обновить решение по патчу',
+      },
+    },
+    sourceFilterChips: {
+      labels: {
+        all: 'Все',
+        microsoft: 'Microsoft',
+        apple: 'Apple',
+        linux: 'Linux',
+        thirdParty: 'Сторонние',
       },
     },
     scripts: {
