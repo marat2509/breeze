@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Eye, Clock, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDate, formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
 
 export type ScriptExecution = {
@@ -26,45 +29,42 @@ type ExecutionHistoryProps = {
   timezone?: string;
 };
 
-const statusConfig: Record<ExecutionStatus, { label: string; color: string; icon: typeof CheckCircle }> = {
-  pending: { label: 'Pending', color: 'bg-muted text-muted-foreground border-border', icon: Clock },
-  running: { label: 'Running', color: 'bg-blue-500/20 text-blue-700 border-blue-500/40', icon: Loader2 },
-  completed: { label: 'Completed', color: 'bg-success/15 text-success border-success/30', icon: CheckCircle },
-  failed: { label: 'Failed', color: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
-  timeout: { label: 'Timeout', color: 'bg-warning/15 text-warning border-warning/30', icon: AlertTriangle }
+const statusConfig: Record<ExecutionStatus, { color: string; icon: typeof CheckCircle }> = {
+  pending: { color: 'bg-muted text-muted-foreground border-border', icon: Clock },
+  running: { color: 'bg-blue-500/20 text-blue-700 border-blue-500/40', icon: Loader2 },
+  completed: { color: 'bg-success/15 text-success border-success/30', icon: CheckCircle },
+  failed: { color: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
+  timeout: { color: 'bg-warning/15 text-warning border-warning/30', icon: AlertTriangle }
 };
 
-function formatDuration(seconds?: number): string {
+function formatDuration(
+  seconds: number | undefined,
+  locale: Locale,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   if (seconds === undefined || seconds === null) return '-';
-  if (seconds < 1) return '<1s';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  if (seconds < 1) return t('scripts.execution.duration.lessThanSecond');
+  if (seconds < 60) return t('scripts.execution.duration.seconds', { count: formatNumber(Math.round(seconds), locale) });
+  if (seconds < 3600) {
+    return t('scripts.execution.duration.minutesSeconds', {
+      minutes: formatNumber(Math.floor(seconds / 60), locale),
+      seconds: formatNumber(Math.round(seconds % 60), locale),
+    });
+  }
   const hours = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
-  return `${hours}h ${mins}m`;
+  return t('scripts.execution.duration.hoursMinutes', {
+    hours: formatNumber(hours, locale),
+    minutes: formatNumber(mins, locale),
+  });
 }
 
-function formatDateTime(dateString: string, timezone?: string): string {
+function formatDateTime(dateString: string, locale: Locale, timezone?: string): string {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
 
   const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-
-  if (isToday) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz });
-  }
-
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-
-  if (isYesterday) {
-    return `Yesterday ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz })}`;
-  }
-
-  return date.toLocaleString([], {
+  return formatDate(date, locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -80,6 +80,7 @@ export default function ExecutionHistory({
   showScriptName = true,
   timezone
 }: ExecutionHistoryProps) {
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
@@ -176,7 +177,7 @@ export default function ExecutionHistory({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              placeholder="Search..."
+              placeholder={t('scripts.execution.history.searchPlaceholder')}
               value={query}
               onChange={event => {
                 setQuery(event.target.value);
@@ -193,12 +194,12 @@ export default function ExecutionHistory({
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="running">Running</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="timeout">Timeout</option>
+            <option value="all">{t('scripts.execution.history.allStatus')}</option>
+            <option value="pending">{t('scripts.execution.status.pending')}</option>
+            <option value="running">{t('scripts.execution.status.running')}</option>
+            <option value="completed">{t('scripts.execution.status.completed')}</option>
+            <option value="failed">{t('scripts.execution.status.failed')}</option>
+            <option value="timeout">{t('scripts.execution.status.timeout')}</option>
           </select>
           <select
             value={dateFilter}
@@ -208,15 +209,18 @@ export default function ExecutionHistory({
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Time</option>
-            <option value="hour">Last Hour</option>
-            <option value="day">Last 24 Hours</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">Last 30 Days</option>
+            <option value="all">{t('scripts.execution.history.allTime')}</option>
+            <option value="hour">{t('scripts.execution.history.lastHour')}</option>
+            <option value="day">{t('scripts.execution.history.last24Hours')}</option>
+            <option value="week">{t('scripts.execution.history.last7Days')}</option>
+            <option value="month">{t('scripts.execution.history.last30Days')}</option>
           </select>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-          {filteredExecutions.length} of {executions.length}
+          {t('scripts.execution.history.countSummary', {
+            filtered: formatNumber(filteredExecutions.length, locale),
+            total: formatNumber(executions.length, locale),
+          })}
         </span>
       </div>
 
@@ -227,49 +231,49 @@ export default function ExecutionHistory({
               {showScriptName && (
                 <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('scriptName')}>
                   <span className="inline-flex items-center gap-1">
-                    Script
+                    {t('scripts.execution.history.headers.script')}
                     {sortColumn === 'scriptName' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                   </span>
                 </th>
               )}
               <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('device')}>
                 <span className="inline-flex items-center gap-1">
-                  Device
+                  {t('scripts.execution.history.headers.device')}
                   {sortColumn === 'device' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                 </span>
               </th>
               <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('status')}>
                 <span className="inline-flex items-center gap-1">
-                  Status
+                  {t('scripts.execution.history.headers.status')}
                   {sortColumn === 'status' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                 </span>
               </th>
               <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('startedAt')}>
                 <span className="inline-flex items-center gap-1">
-                  Started
+                  {t('scripts.execution.history.headers.started')}
                   {sortColumn === 'startedAt' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                 </span>
               </th>
               <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('duration')}>
                 <span className="inline-flex items-center gap-1">
-                  Duration
+                  {t('scripts.execution.history.headers.duration')}
                   {sortColumn === 'duration' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                 </span>
               </th>
               <th className="px-4 py-2.5 cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => toggleSort('exitCode')}>
                 <span className="inline-flex items-center gap-1">
-                  Exit Code
+                  {t('scripts.execution.history.headers.exitCode')}
                   {sortColumn === 'exitCode' && (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                 </span>
               </th>
-              <th className="px-4 py-2.5 text-right">Actions</th>
+              <th className="px-4 py-2.5 text-right">{t('scripts.execution.history.headers.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {paginatedExecutions.length === 0 ? (
               <tr>
                 <td colSpan={showScriptName ? 7 : 6} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  No executions found. Try adjusting your filters.
+                  {t('scripts.execution.history.empty')}
                 </td>
               </tr>
             ) : (
@@ -299,20 +303,20 @@ export default function ExecutionHistory({
                           'h-3 w-3',
                           execution.status === 'running' && 'animate-spin'
                         )} />
-                        {statusConfig[execution.status].label}
+                        {t(`scripts.execution.status.${execution.status}`)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {formatDateTime(execution.startedAt, timezone)}
+                      {formatDateTime(execution.startedAt, locale, timezone)}
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {execution.status === 'running' ? (
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3 animate-pulse" />
-                          Running...
+                          {t('scripts.execution.history.running')}
                         </span>
                       ) : (
-                        formatDuration(execution.duration)
+                        formatDuration(execution.duration, locale, t)
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -338,7 +342,7 @@ export default function ExecutionHistory({
                             onViewDetails?.(execution);
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
-                          title="View details"
+                          title={t('scripts.execution.history.viewDetails')}
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -355,7 +359,11 @@ export default function ExecutionHistory({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(startIndex + pageSize, filteredExecutions.length)} of {filteredExecutions.length}
+            {t('scripts.execution.history.showing', {
+              start: formatNumber(startIndex + 1, locale),
+              end: formatNumber(Math.min(startIndex + pageSize, filteredExecutions.length), locale),
+              total: formatNumber(filteredExecutions.length, locale),
+            })}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -367,7 +375,10 @@ export default function ExecutionHistory({
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="text-sm">
-              Page {currentPage} of {totalPages}
+              {t('scripts.execution.history.page', {
+                current: formatNumber(currentPage, locale),
+                total: formatNumber(totalPages, locale),
+              })}
             </span>
             <button
               type="button"

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { X, ChevronDown, ChevronUp, Copy, Check, Clock, CheckCircle, XCircle, Loader2, AlertTriangle, Terminal, AlertOctagon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ScriptExecution, ExecutionStatus } from './ExecutionHistory';
+import { formatDate, formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 
 type ExecutionDetailsProps = {
   execution: ScriptExecution;
@@ -10,29 +13,41 @@ type ExecutionDetailsProps = {
   timezone?: string;
 };
 
-const statusConfig: Record<ExecutionStatus, { label: string; color: string; bgColor: string; icon: typeof CheckCircle }> = {
-  pending: { label: 'Pending', color: 'text-muted-foreground', bgColor: 'bg-muted', icon: Clock },
-  running: { label: 'Running', color: 'text-blue-700 dark:text-blue-400', bgColor: 'bg-blue-500/10', icon: Loader2 },
-  completed: { label: 'Completed', color: 'text-success', bgColor: 'bg-success/10', icon: CheckCircle },
-  failed: { label: 'Failed', color: 'text-destructive', bgColor: 'bg-destructive/10', icon: XCircle },
-  timeout: { label: 'Timeout', color: 'text-warning', bgColor: 'bg-warning/10', icon: AlertTriangle }
+const statusConfig: Record<ExecutionStatus, { color: string; bgColor: string; icon: typeof CheckCircle }> = {
+  pending: { color: 'text-muted-foreground', bgColor: 'bg-muted', icon: Clock },
+  running: { color: 'text-blue-700 dark:text-blue-400', bgColor: 'bg-blue-500/10', icon: Loader2 },
+  completed: { color: 'text-success', bgColor: 'bg-success/10', icon: CheckCircle },
+  failed: { color: 'text-destructive', bgColor: 'bg-destructive/10', icon: XCircle },
+  timeout: { color: 'text-warning', bgColor: 'bg-warning/10', icon: AlertTriangle }
 };
 
-function formatDuration(seconds?: number): string {
+function formatDuration(
+  seconds: number | undefined,
+  locale: Locale,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   if (seconds === undefined || seconds === null) return '-';
-  if (seconds < 1) return '<1s';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  if (seconds < 1) return t('scripts.execution.duration.lessThanSecond');
+  if (seconds < 60) return t('scripts.execution.duration.seconds', { count: formatNumber(Math.round(seconds), locale) });
+  if (seconds < 3600) {
+    return t('scripts.execution.duration.minutesSeconds', {
+      minutes: formatNumber(Math.floor(seconds / 60), locale),
+      seconds: formatNumber(Math.round(seconds % 60), locale),
+    });
+  }
   const hours = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
-  return `${hours}h ${mins}m`;
+  return t('scripts.execution.duration.hoursMinutes', {
+    hours: formatNumber(hours, locale),
+    minutes: formatNumber(mins, locale),
+  });
 }
 
-function formatDateTime(dateString: string, timezone?: string): string {
+function formatDateTime(dateString: string, locale: Locale, timezone?: string): string {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
   const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return date.toLocaleString([], {
+  return formatDate(date, locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -67,6 +82,7 @@ function OutputSection({
   defaultOpen?: boolean;
   variant?: 'default' | 'error';
 }) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
   const normalized = content ? normalizeOutput(content) : content;
@@ -110,7 +126,7 @@ function OutputSection({
             {title}
           </span>
           {isEmpty && (
-            <span className="text-xs text-muted-foreground">(empty)</span>
+            <span className="text-xs text-muted-foreground">{t('scripts.execution.details.emptyMarker')}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -122,7 +138,7 @@ function OutputSection({
                 handleCopy();
               }}
               className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted"
-              title="Copy to clipboard"
+              title={t('scripts.execution.details.copyToClipboard')}
             >
               {copied ? (
                 <Check className="h-4 w-4 text-success" />
@@ -141,7 +157,7 @@ function OutputSection({
       {isOpen && (
         <div className="p-4">
           {isEmpty ? (
-            <p className="text-sm text-muted-foreground italic">No output</p>
+            <p className="text-sm text-muted-foreground italic">{t('scripts.execution.details.noOutput')}</p>
           ) : (
             <pre className={cn(
               'overflow-x-auto rounded-md p-4 text-sm font-mono whitespace-pre-wrap break-words',
@@ -162,6 +178,7 @@ export default function ExecutionDetails({
   onClose,
   timezone
 }: ExecutionDetailsProps) {
+  const { locale, t } = useI18n();
   if (!isOpen) return null;
 
   const StatusIcon = statusConfig[execution.status].icon;
@@ -172,12 +189,13 @@ export default function ExecutionDetails({
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">Execution Details</h2>
+            <h2 className="text-lg font-semibold">{t('scripts.execution.details.title')}</h2>
             <p className="text-sm text-muted-foreground">{execution.scriptName}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('common.dismiss')}
             className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
           >
             <X className="h-5 w-5" />
@@ -202,18 +220,10 @@ export default function ExecutionDetails({
                   'text-lg font-semibold',
                   statusConfig[execution.status].color
                 )}>
-                  {statusConfig[execution.status].label}
+                  {t(`scripts.execution.status.${execution.status}`)}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {execution.status === 'running'
-                    ? 'Script is currently executing...'
-                    : execution.status === 'completed'
-                      ? 'Script completed successfully'
-                      : execution.status === 'failed'
-                        ? 'Script execution failed'
-                        : execution.status === 'timeout'
-                          ? 'Script execution timed out'
-                          : 'Script is waiting to be executed'}
+                  {t(`scripts.execution.details.statusDescriptions.${execution.status}`)}
                 </p>
               </div>
             </div>
@@ -222,28 +232,28 @@ export default function ExecutionDetails({
           {/* Metadata Grid */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-md border bg-muted/20 p-4">
-              <p className="text-xs font-medium text-muted-foreground">Device</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.execution.details.device')}</p>
               <p className="text-sm font-medium mt-1">{execution.deviceHostname}</p>
             </div>
             <div className="rounded-md border bg-muted/20 p-4">
-              <p className="text-xs font-medium text-muted-foreground">Started At</p>
-              <p className="text-sm font-medium mt-1">{formatDateTime(execution.startedAt, timezone)}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.execution.details.startedAt')}</p>
+              <p className="text-sm font-medium mt-1">{formatDateTime(execution.startedAt, locale, timezone)}</p>
             </div>
             <div className="rounded-md border bg-muted/20 p-4">
-              <p className="text-xs font-medium text-muted-foreground">Duration</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.execution.details.duration')}</p>
               <p className="text-sm font-medium mt-1">
                 {execution.status === 'running' ? (
                   <span className="flex items-center gap-1">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Running...
+                    {t('scripts.execution.details.running')}
                   </span>
                 ) : (
-                  formatDuration(execution.duration)
+                  formatDuration(execution.duration, locale, t)
                 )}
               </p>
             </div>
             <div className="rounded-md border bg-muted/20 p-4">
-              <p className="text-xs font-medium text-muted-foreground">Exit Code</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.execution.details.exitCode')}</p>
               <p className="text-sm font-medium mt-1">
                 {execution.exitCode !== undefined ? (
                   <span className={cn(
@@ -263,24 +273,24 @@ export default function ExecutionDetails({
 
           {execution.completedAt && (
             <div className="rounded-md border bg-muted/20 p-4">
-              <p className="text-xs font-medium text-muted-foreground">Completed At</p>
-              <p className="text-sm font-medium mt-1">{formatDateTime(execution.completedAt, timezone)}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.execution.details.completedAt')}</p>
+              <p className="text-sm font-medium mt-1">{formatDateTime(execution.completedAt, locale, timezone)}</p>
             </div>
           )}
 
           {/* Output Sections */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Output</h3>
+            <h3 className="text-sm font-semibold">{t('scripts.execution.details.output')}</h3>
 
             <OutputSection
-              title="Standard Output (stdout)"
+              title={t('scripts.execution.details.stdout')}
               content={execution.stdout}
               icon={Terminal}
               defaultOpen={true}
             />
 
             <OutputSection
-              title="Standard Error (stderr)"
+              title={t('scripts.execution.details.stderr')}
               content={execution.stderr}
               icon={AlertOctagon}
               defaultOpen={!!execution.stderr}
@@ -296,7 +306,7 @@ export default function ExecutionDetails({
             onClick={onClose}
             className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
           >
-            Close
+            {t('scripts.execution.details.close')}
           </button>
         </div>
       </div>
