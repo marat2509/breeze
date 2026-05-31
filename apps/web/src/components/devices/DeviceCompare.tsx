@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchWithAuth } from '@/stores/auth';
 import {
   Search,
@@ -20,6 +20,10 @@ import {
   Legend
 } from 'recharts';
 import type { Device, DeviceStatus, OSType } from './DeviceList';
+import { formatDate, formatNumber } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 type SoftwareItem = {
   name: string;
@@ -60,6 +64,8 @@ type DeviceCompareProps = {
   timezone?: string;
 };
 
+type Translate = (key: string, params?: TranslationParams) => string;
+
 const statusColors: Record<DeviceStatus, string> = {
   online: 'bg-success/15 text-success border-success/30',
   offline: 'bg-destructive/15 text-destructive border-destructive/30',
@@ -70,16 +76,6 @@ const statusColors: Record<DeviceStatus, string> = {
   pending: 'bg-muted text-muted-foreground border-border'
 };
 
-const statusLabels: Record<DeviceStatus, string> = {
-  online: 'Online',
-  offline: 'Offline',
-  maintenance: 'Maintenance',
-  decommissioned: 'Decommissioned',
-  quarantined: 'Quarantined',
-  updating: 'Updating',
-  pending: 'Pending'
-};
-
 const osLabels: Record<OSType, string> = {
   windows: 'Windows',
   macos: 'macOS',
@@ -88,11 +84,26 @@ const osLabels: Record<OSType, string> = {
 
 const metricColors = ['#3b82f6', '#22c55e', '#f97316', '#a855f7'];
 
-const timeRangeOptions: Record<TimeRange, { label: string; count: number; intervalMs: number }> = {
-  '1h': { label: 'Last hour', count: 12, intervalMs: 5 * 60 * 1000 },
-  '6h': { label: 'Last 6 hours', count: 24, intervalMs: 15 * 60 * 1000 },
-  '24h': { label: 'Last 24 hours', count: 24, intervalMs: 60 * 60 * 1000 }
+const timeRangeOptions: Record<TimeRange, { count: number; intervalMs: number }> = {
+  '1h': { count: 12, intervalMs: 5 * 60 * 1000 },
+  '6h': { count: 24, intervalMs: 15 * 60 * 1000 },
+  '24h': { count: 24, intervalMs: 60 * 60 * 1000 }
 };
+
+const timeRanges: TimeRange[] = ['1h', '6h', '24h'];
+const metricKeys: MetricKey[] = ['cpu', 'ram', 'disk'];
+
+function statusLabel(status: DeviceStatus, t: Translate): string {
+  return t(`deviceCompare.status.${status}`);
+}
+
+function patchStatusLabel(status: PatchStatus, t: Translate): string {
+  return t(`deviceCompare.patchStatus.${status}`);
+}
+
+function metricLabel(metric: MetricKey, t: Translate): string {
+  return t(`deviceCompare.metrics.${metric}`);
+}
 
 function normalizeOs(value: unknown): OSType {
   const raw = String(value ?? '').toLowerCase();
@@ -118,7 +129,7 @@ function toNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
-function formatCapacity(value: unknown, fallback = 'Unknown'): string {
+function formatCapacity(value: unknown, fallback: string): string {
   if (typeof value === 'string' && value.trim().length > 0) return value;
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
   if (value < 128) return `${Math.round(value)} GB`;
@@ -130,26 +141,33 @@ function formatCapacity(value: unknown, fallback = 'Unknown'): string {
   return `${value} B`;
 }
 
-function formatTimestamp(timestamp: string, range: TimeRange, timezone?: string): string {
+function formatTimestamp(timestamp: string, range: TimeRange, locale: Locale, timezone?: string): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return timestamp;
-  const tzOptions = timezone ? { timeZone: timezone } : undefined;
+  const tzOptions = timezone ? { timeZone: timezone } : {};
   switch (range) {
     case '1h':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...tzOptions });
+      return formatDate(date, locale, { hour: '2-digit', minute: '2-digit', ...tzOptions });
     case '6h':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...tzOptions });
+      return formatDate(date, locale, { hour: '2-digit', minute: '2-digit', ...tzOptions });
     case '24h':
-      return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', ...tzOptions });
+      return formatDate(date, locale, { weekday: 'short', hour: '2-digit', ...tzOptions });
     default:
-      return date.toLocaleTimeString([], tzOptions);
+      return formatDate(date, locale, tzOptions);
   }
 }
 
-function formatDateTime(value: string, timezone?: string): string {
+function formatDateTime(value: string, locale: Locale, timezone?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], timezone ? { timeZone: timezone } : undefined);
+  return formatDate(date, locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(timezone ? { timeZone: timezone } : {}),
+  });
 }
 
 function createSeededRandom(seed: number) {
@@ -165,11 +183,11 @@ function hashSeed(input: string): number {
   return input.split('').reduce((acc, char) => acc + char.charCodeAt(0) * 37, 0);
 }
 
-function normalizeDeviceSummary(raw: Record<string, unknown>, index: number): Device {
+function normalizeDeviceSummary(raw: Record<string, unknown>, index: number, t: Translate): Device {
   const id = String(raw.id ?? raw.deviceId ?? raw.uuid ?? `device-${index}`);
-  const hostname = String(raw.hostname ?? raw.displayName ?? raw.name ?? `Device ${id}`);
+  const hostname = String(raw.hostname ?? raw.displayName ?? raw.name ?? t('deviceCompare.placeholders.device', { id }));
   const os = normalizeOs(raw.os ?? raw.osType ?? raw.platform ?? raw.operatingSystem ?? 'windows');
-  const osVersion = String(raw.osVersion ?? raw.platformVersion ?? raw.version ?? 'Unknown');
+  const osVersion = String(raw.osVersion ?? raw.platformVersion ?? raw.version ?? t('deviceCompare.placeholders.unknown'));
   const status = normalizeStatus(raw.status ?? raw.state ?? raw.connectionStatus ?? 'offline');
   const cpu = raw.cpu as Record<string, unknown> | undefined;
   const ram = raw.ram as Record<string, unknown> | undefined;
@@ -178,9 +196,9 @@ function normalizeDeviceSummary(raw: Record<string, unknown>, index: number): De
   const ramPercent = toNumber(raw.ramPercent ?? raw.memoryUsage ?? ram?.percent, 0);
   const lastSeen = String(raw.lastSeen ?? raw.lastSeenAt ?? raw.seenAt ?? '2024-01-15T12:00:00.000Z');
   const orgId = String(raw.orgId ?? raw.organizationId ?? '');
-  const orgName = String(raw.orgName ?? raw.organizationName ?? 'Unknown');
+  const orgName = String(raw.orgName ?? raw.organizationName ?? t('deviceCompare.placeholders.unknown'));
   const siteId = String(raw.siteId ?? raw.locationId ?? 'site-0');
-  const siteName = String(raw.siteName ?? raw.location ?? raw.site ?? 'Unknown');
+  const siteName = String(raw.siteName ?? raw.location ?? raw.site ?? t('deviceCompare.placeholders.unknown'));
   const agentVersion = String(raw.agentVersion ?? agent?.version ?? raw.agent ?? '-');
   const tags = Array.isArray(raw.tags) ? raw.tags.map(tag => String(tag)) : [];
 
@@ -202,7 +220,7 @@ function normalizeDeviceSummary(raw: Record<string, unknown>, index: number): De
   };
 }
 
-function normalizeSoftwareList(raw: unknown): SoftwareItem[] {
+function normalizeSoftwareList(raw: unknown, t: Translate): SoftwareItem[] {
   if (!raw) return [];
   if (Array.isArray(raw)) {
     return raw
@@ -213,7 +231,7 @@ function normalizeSoftwareList(raw: unknown): SoftwareItem[] {
         if (item && typeof item === 'object') {
           const record = item as Record<string, unknown>;
           return {
-            name: String(record.name ?? record.title ?? record.package ?? record.app ?? 'Unknown'),
+            name: String(record.name ?? record.title ?? record.package ?? record.app ?? t('deviceCompare.placeholders.unknown')),
             version: record.version ? String(record.version) : undefined,
             publisher: record.publisher ? String(record.publisher) : undefined
           };
@@ -225,12 +243,12 @@ function normalizeSoftwareList(raw: unknown): SoftwareItem[] {
   if (typeof raw === 'object') {
     const record = raw as Record<string, unknown>;
     const installed = record.installedApps ?? record.apps ?? record.software;
-    if (Array.isArray(installed)) return normalizeSoftwareList(installed);
+    if (Array.isArray(installed)) return normalizeSoftwareList(installed, t);
   }
   return [];
 }
 
-function normalizePatchList(raw: unknown): PatchItem[] {
+function normalizePatchList(raw: unknown, t: Translate): PatchItem[] {
   if (!raw) return [];
   if (Array.isArray(raw)) {
     return raw
@@ -251,7 +269,7 @@ function normalizePatchList(raw: unknown): PatchItem[] {
           else if (statusRaw.includes('pending') || statusRaw.includes('available')) status = 'pending';
           return {
             id: String(record.id ?? record.patchId ?? `patch-${index}`),
-            name: String(record.name ?? record.title ?? record.kb ?? 'Patch'),
+            name: String(record.name ?? record.title ?? record.kb ?? t('deviceCompare.placeholders.patch')),
             status
           };
         }
@@ -266,10 +284,10 @@ function normalizePatchList(raw: unknown): PatchItem[] {
     const items: PatchItem[] = [];
 
     if (Array.isArray(installed)) {
-      items.push(...normalizePatchList(installed).map(item => ({ ...item, status: 'installed' as PatchStatus })));
+      items.push(...normalizePatchList(installed, t).map(item => ({ ...item, status: 'installed' as PatchStatus })));
     }
     if (Array.isArray(missing)) {
-      items.push(...normalizePatchList(missing).map(item => ({ ...item, status: 'missing' as PatchStatus })));
+      items.push(...normalizePatchList(missing, t).map(item => ({ ...item, status: 'missing' as PatchStatus })));
     }
     if (items.length > 0) return items;
   }
@@ -342,12 +360,12 @@ function generateMetrics(device: Device, range: TimeRange): MetricPoint[] {
   return points;
 }
 
-function deviceToComparisonData(device: Device): DeviceComparisonData {
+function deviceToComparisonData(device: Device, t: Translate): DeviceComparisonData {
   return {
     ...device,
-    cpuModel: 'Unknown',
-    totalRam: 'Unknown',
-    diskTotal: 'Unknown',
+    cpuModel: t('deviceCompare.placeholders.unknown'),
+    totalRam: t('deviceCompare.placeholders.unknown'),
+    diskTotal: t('deviceCompare.placeholders.unknown'),
     software: [],
     patches: [],
     config: {},
@@ -355,12 +373,12 @@ function deviceToComparisonData(device: Device): DeviceComparisonData {
   };
 }
 
-function normalizeDeviceDetail(raw: Record<string, unknown>, fallback: Device): DeviceComparisonData {
+function normalizeDeviceDetail(raw: Record<string, unknown>, fallback: Device, t: Translate): DeviceComparisonData {
   const source = (raw.device ?? raw.data ?? raw.item ?? raw) as Record<string, unknown>;
   const id = String(source.id ?? source.deviceId ?? fallback.id);
   const hostname = String(source.hostname ?? source.displayName ?? source.name ?? fallback.hostname);
   const os = normalizeOs(source.os ?? source.osType ?? source.platform ?? fallback.os);
-  const osVersion = String(source.osVersion ?? source.platformVersion ?? fallback.osVersion ?? 'Unknown');
+  const osVersion = String(source.osVersion ?? source.platformVersion ?? fallback.osVersion ?? t('deviceCompare.placeholders.unknown'));
   const status = normalizeStatus(source.status ?? source.state ?? fallback.status);
   const cpu = source.cpu as Record<string, unknown> | undefined;
   const memory = source.memory as Record<string, unknown> | undefined;
@@ -378,7 +396,7 @@ function normalizeDeviceDetail(raw: Record<string, unknown>, fallback: Device): 
     hardware.cpuModel ??
     (hardware.cpu as Record<string, unknown> | undefined)?.model ??
     source.cpuModel ??
-    'Unknown'
+    t('deviceCompare.placeholders.unknown')
   );
   const totalRam = formatCapacity(
     hardware.totalRam ??
@@ -386,19 +404,19 @@ function normalizeDeviceDetail(raw: Record<string, unknown>, fallback: Device): 
     (hardware.memory as Record<string, unknown> | undefined)?.total ??
     source.totalRam ??
     source.ramTotal,
-    'Unknown'
+    t('deviceCompare.placeholders.unknown')
   );
   const diskTotal = formatCapacity(
     hardware.diskTotal ??
     (hardware.disk as Record<string, unknown> | undefined)?.total ??
     source.diskTotal ??
     source.storageTotal,
-    'Unknown'
+    t('deviceCompare.placeholders.unknown')
   );
 
   const softwareRecord = source.software as Record<string, unknown> | undefined;
-  const software = normalizeSoftwareList(softwareRecord?.installedApps ?? source.installedApps ?? source.software);
-  const patches = normalizePatchList(source.patches ?? source.patchStatus ?? source.patchSummary ?? source.updates);
+  const software = normalizeSoftwareList(softwareRecord?.installedApps ?? source.installedApps ?? source.software, t);
+  const patches = normalizePatchList(source.patches ?? source.patchStatus ?? source.patchSummary ?? source.updates, t);
   const config = normalizeConfig(source.configuration ?? source.config ?? source.settings);
   const metrics = normalizeMetrics(source.metrics ?? source.performance ?? source.telemetry);
 
@@ -412,7 +430,7 @@ function normalizeDeviceDetail(raw: Record<string, unknown>, fallback: Device): 
     ramPercent,
     lastSeen,
     orgId: String(source.orgId ?? source.organizationId ?? ''),
-    orgName: String(source.orgName ?? source.organizationName ?? 'Unknown'),
+    orgName: String(source.orgName ?? source.organizationName ?? t('deviceCompare.placeholders.unknown')),
     siteId,
     siteName,
     agentVersion,
@@ -448,15 +466,20 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function buildPdfHtml(selectedDevices: DeviceComparisonData[], osLabels: Record<OSType, string>, generatedDate: string): string {
+function buildPdfHtml(
+  selectedDevices: DeviceComparisonData[],
+  osLabels: Record<OSType, string>,
+  generatedDate: string,
+  t: Translate,
+): string {
   const safe = (value: unknown): string => escapeHtml(String(value ?? '-'));
 
   const specsRows = [
     { label: 'OS', getValue: (device: DeviceComparisonData) => `${osLabels[device.os]} ${device.osVersion}` },
-    { label: 'CPU', getValue: (device: DeviceComparisonData) => device.cpuModel || 'Unknown' },
-    { label: 'RAM', getValue: (device: DeviceComparisonData) => device.totalRam || 'Unknown' },
-    { label: 'Disk', getValue: (device: DeviceComparisonData) => device.diskTotal || 'Unknown' },
-    { label: 'Agent Version', getValue: (device: DeviceComparisonData) => device.agentVersion || 'Unknown' }
+    { label: 'CPU', getValue: (device: DeviceComparisonData) => device.cpuModel || t('deviceCompare.placeholders.unknown') },
+    { label: 'RAM', getValue: (device: DeviceComparisonData) => device.totalRam || t('deviceCompare.placeholders.unknown') },
+    { label: t('deviceCompare.spec.disk'), getValue: (device: DeviceComparisonData) => device.diskTotal || t('deviceCompare.placeholders.unknown') },
+    { label: t('deviceCompare.spec.agentVersion'), getValue: (device: DeviceComparisonData) => device.agentVersion || t('deviceCompare.placeholders.unknown') }
   ];
 
   const specsTableRows = specsRows.map(row =>
@@ -465,12 +488,12 @@ function buildPdfHtml(selectedDevices: DeviceComparisonData[], osLabels: Record<
 
   const softwareSection = selectedDevices.map(device => {
     const list = device.software.map(item => item.name).join(', ');
-    return `<div><strong>${safe(device.hostname)}:</strong> ${safe(list || 'No software data')}</div>`;
+    return `<div><strong>${safe(device.hostname)}:</strong> ${safe(list || t('deviceCompare.software.noData'))}</div>`;
   }).join('');
 
   const patchesSection = selectedDevices.map(device => {
     const missing = device.patches.filter(patch => patch.status === 'missing').map(patch => patch.name);
-    return `<div><strong>${safe(device.hostname)} missing:</strong> ${safe(missing.join(', ') || 'None')}</div>`;
+    return `<div><strong>${safe(t('deviceCompare.patches.deviceMissing', { hostname: device.hostname }))}:</strong> ${safe(missing.join(', ') || t('deviceCompare.placeholders.none'))}</div>`;
   }).join('');
 
   const configKeys = Array.from(new Set(selectedDevices.flatMap(device => Object.keys(device.config))));
@@ -481,16 +504,16 @@ function buildPdfHtml(selectedDevices: DeviceComparisonData[], osLabels: Record<
   return `<!DOCTYPE html>
 <html>
   <head>
-    <title>Device Comparison</title>
+    <title>${safe(t('deviceCompare.title'))}</title>
   </head>
   <body>
-    <h1>Device Comparison Report</h1>
-    <div>Generated ${safe(generatedDate)}</div>
-    <h2>Specs</h2>
+    <h1>${safe(t('deviceCompare.export.reportTitle'))}</h1>
+    <div>${safe(t('deviceCompare.export.generated', { date: generatedDate }))}</div>
+    <h2>${safe(t('deviceCompare.sections.specsShort'))}</h2>
     <table>
       <thead>
         <tr>
-          <th>Spec</th>
+          <th>${safe(t('deviceCompare.spec.spec'))}</th>
           ${selectedDevices.map(device => `<th>${safe(device.hostname)}</th>`).join('')}
         </tr>
       </thead>
@@ -498,15 +521,15 @@ function buildPdfHtml(selectedDevices: DeviceComparisonData[], osLabels: Record<
         ${specsTableRows}
       </tbody>
     </table>
-    <h2>Software</h2>
+    <h2>${safe(t('deviceCompare.sections.software'))}</h2>
     ${softwareSection}
-    <h2>Patches</h2>
+    <h2>${safe(t('deviceCompare.sections.patches'))}</h2>
     ${patchesSection}
-    <h2>Configuration</h2>
+    <h2>${safe(t('deviceCompare.sections.configuration'))}</h2>
     <table>
       <thead>
         <tr>
-          <th>Key</th>
+          <th>${safe(t('deviceCompare.config.key'))}</th>
           ${selectedDevices.map(device => `<th>${safe(device.hostname)}</th>`).join('')}
         </tr>
       </thead>
@@ -519,6 +542,8 @@ function buildPdfHtml(selectedDevices: DeviceComparisonData[], osLabels: Record<
 }
 
 export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [availableDevices, setAvailableDevices] = useState<Device[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deviceDetails, setDeviceDetails] = useState<Record<string, DeviceComparisonData>>({});
@@ -531,6 +556,10 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
   const [timeRange, setTimeRange] = useState<TimeRange>('6h');
   const [showAllConfig, setShowAllConfig] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   // Use provided timezone or browser default
   const effectiveTimezone = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -552,11 +581,11 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       .map(id => {
         if (deviceDetails[id]) return deviceDetails[id];
         const device = deviceMap.get(id);
-        if (device) return deviceToComparisonData(device);
+        if (device) return deviceToComparisonData(device, t);
         return null;
       })
       .filter((item): item is DeviceComparisonData => item !== null);
-  }, [selectedIds, deviceDetails, deviceMap]);
+  }, [selectedIds, deviceDetails, deviceMap, t]);
 
   const canCompare = selectedIds.length >= 2;
   const selectionLimitReached = selectedIds.length >= 4;
@@ -567,16 +596,16 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       setListError(undefined);
       const response = await fetchWithAuth('/devices');
       if (!response.ok) {
-        throw new Error('Failed to fetch devices');
+        throw new Error(tRef.current('deviceCompare.errors.loadDevices'));
       }
       const data = await response.json();
       const items = (data.devices ?? data.data ?? data.items ?? data) as unknown;
-      if (!Array.isArray(items)) throw new Error('Unexpected response');
-      const normalized = items.map((device: Record<string, unknown>, index: number) => normalizeDeviceSummary(device, index));
+      if (!Array.isArray(items)) throw new Error(tRef.current('deviceCompare.errors.unexpectedResponse'));
+      const normalized = items.map((device: Record<string, unknown>, index: number) => normalizeDeviceSummary(device, index, tRef.current));
       setAvailableDevices(normalized);
-    } catch (err) {
+    } catch {
       setAvailableDevices([]);
-      setListError(err instanceof Error ? err.message : 'Failed to load devices');
+      setListError(tRef.current('deviceCompare.errors.loadDevices'));
     } finally {
       setLoadingDevices(false);
     }
@@ -594,30 +623,30 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           const fallback = deviceMap.get(id);
           try {
             const response = await fetchWithAuth(`/devices/${id}`);
-            if (!response.ok) throw new Error('Failed to fetch device');
+            if (!response.ok) throw new Error(tRef.current('deviceCompare.errors.loadDevice'));
             const data = await response.json();
             const baseFallback: Device = fallback ?? {
               id,
-              hostname: `Device ${id}`,
+              hostname: tRef.current('deviceCompare.placeholders.device', { id }),
               os: 'windows',
-              osVersion: 'Unknown',
+              osVersion: tRef.current('deviceCompare.placeholders.unknown'),
               status: 'offline',
               cpuPercent: 0,
               ramPercent: 0,
               lastSeen: new Date().toISOString(),
               orgId: '',
-              orgName: 'Unknown',
+              orgName: tRef.current('deviceCompare.placeholders.unknown'),
               siteId: '',
-              siteName: 'Unknown',
+              siteName: tRef.current('deviceCompare.placeholders.unknown'),
               agentVersion: '-',
               tags: []
             };
-            const normalized = normalizeDeviceDetail(data as Record<string, unknown>, baseFallback);
+            const normalized = normalizeDeviceDetail(data as Record<string, unknown>, baseFallback, tRef.current);
             return [id, normalized] as const;
           } catch {
             failedIds.push(id);
             if (fallback) {
-              return [id, deviceToComparisonData(fallback)] as const;
+              return [id, deviceToComparisonData(fallback, tRef.current)] as const;
             }
             return [id, null] as const;
           }
@@ -636,10 +665,10 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
         return next;
       });
       if (failedIds.length > 0) {
-        setDetailsError(`Failed to load details for ${failedIds.length} device(s)`);
+        setDetailsError(tRef.current('deviceCompare.errors.loadDetailsCount', { count: String(failedIds.length) }));
       }
-    } catch (err) {
-      setDetailsError(err instanceof Error ? err.message : 'Failed to load device details');
+    } catch {
+      setDetailsError(tRef.current('deviceCompare.errors.loadDetails'));
     } finally {
       setLoadingDetails(false);
     }
@@ -704,8 +733,8 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      window.prompt('Copy this link to share the comparison:', url);
+    } catch {
+      window.prompt(tRef.current('deviceCompare.share.copyPrompt'), url);
     }
   };
 
@@ -713,14 +742,18 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
     if (selectedDevices.length === 0) return;
 
     const rows: string[][] = [];
-    const header = ['Category', 'Item', ...selectedDevices.map(device => device.hostname)];
+    const header = [
+      tRef.current('deviceCompare.export.category'),
+      tRef.current('deviceCompare.export.item'),
+      ...selectedDevices.map(device => device.hostname)
+    ];
     rows.push(header);
 
-    rows.push(['Specs', 'OS', ...selectedDevices.map(device => `${osLabels[device.os]} ${device.osVersion}`)]);
-    rows.push(['Specs', 'CPU', ...selectedDevices.map(device => device.cpuModel || 'Unknown')]);
-    rows.push(['Specs', 'RAM', ...selectedDevices.map(device => device.totalRam || 'Unknown')]);
-    rows.push(['Specs', 'Disk', ...selectedDevices.map(device => device.diskTotal || 'Unknown')]);
-    rows.push(['Specs', 'Agent Version', ...selectedDevices.map(device => device.agentVersion || 'Unknown')]);
+    rows.push([tRef.current('deviceCompare.sections.specsShort'), 'OS', ...selectedDevices.map(device => `${osLabels[device.os]} ${device.osVersion}`)]);
+    rows.push([tRef.current('deviceCompare.sections.specsShort'), 'CPU', ...selectedDevices.map(device => device.cpuModel || tRef.current('deviceCompare.placeholders.unknown'))]);
+    rows.push([tRef.current('deviceCompare.sections.specsShort'), 'RAM', ...selectedDevices.map(device => device.totalRam || tRef.current('deviceCompare.placeholders.unknown'))]);
+    rows.push([tRef.current('deviceCompare.sections.specsShort'), tRef.current('deviceCompare.spec.disk'), ...selectedDevices.map(device => device.diskTotal || tRef.current('deviceCompare.placeholders.unknown'))]);
+    rows.push([tRef.current('deviceCompare.sections.specsShort'), tRef.current('deviceCompare.spec.agentVersion'), ...selectedDevices.map(device => device.agentVersion || tRef.current('deviceCompare.placeholders.unknown'))]);
 
     const commonSoftware = selectedDevices
       .map(device => device.software.map(item => item.name))
@@ -728,22 +761,30 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
         if (index === 0) return list;
         return acc.filter(item => list.includes(item));
       }, []);
-    rows.push(['Software', 'Common', commonSoftware.join('; ')]);
+    rows.push([tRef.current('deviceCompare.sections.software'), tRef.current('deviceCompare.software.common'), commonSoftware.join('; ')]);
     selectedDevices.forEach(device => {
       const unique = device.software
         .map(item => item.name)
         .filter(name => !commonSoftware.includes(name));
-      rows.push(['Software', `Unique to ${device.hostname}`, unique.join('; ')]);
+      rows.push([
+        tRef.current('deviceCompare.sections.software'),
+        tRef.current('deviceCompare.software.uniqueTo', { hostname: device.hostname }),
+        unique.join('; ')
+      ]);
     });
 
     selectedDevices.forEach(device => {
       const missing = device.patches.filter(patch => patch.status === 'missing').map(patch => patch.name);
-      rows.push(['Patches', `${device.hostname} missing`, missing.join('; ')]);
+      rows.push([
+        tRef.current('deviceCompare.sections.patches'),
+        tRef.current('deviceCompare.patches.deviceMissing', { hostname: device.hostname }),
+        missing.join('; ')
+      ]);
     });
 
     const configKeys = Array.from(new Set(selectedDevices.flatMap(device => Object.keys(device.config))));
     configKeys.forEach(key => {
-      rows.push(['Config', key, ...selectedDevices.map(device => device.config[key] ?? '-')]);
+      rows.push([tRef.current('deviceCompare.sections.configShort'), key, ...selectedDevices.map(device => device.config[key] ?? '-')]);
     });
 
     const csv = rows.map(row => row.map(value => escapeCsv(value ?? '')).join(',')).join('\n');
@@ -761,8 +802,8 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
 
   const handleExportPdf = () => {
     if (selectedDevices.length === 0) return;
-    const generatedDate = formatDateTime(new Date().toISOString(), effectiveTimezone);
-    const html = buildPdfHtml(selectedDevices, osLabels, generatedDate);
+    const generatedDate = formatDateTime(new Date().toISOString(), locale, effectiveTimezone);
+    const html = buildPdfHtml(selectedDevices, osLabels, generatedDate, tRef.current);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const blobUrl = URL.createObjectURL(blob);
     const printWindow = window.open(blobUrl, '_blank', 'width=900,height=700');
@@ -851,7 +892,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading devices...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('deviceCompare.loading')}</p>
         </div>
       </div>
     );
@@ -861,9 +902,9 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Device Comparison</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('deviceCompare.title')}</h1>
           <p className="text-muted-foreground">
-            Compare hardware, software, patches, and configuration across your fleet.
+            {t('deviceCompare.description')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -873,7 +914,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm font-medium shadow-sm hover:bg-muted"
           >
             <FileText className="h-4 w-4" />
-            Export PDF
+            {t('deviceCompare.actions.exportPdf')}
           </button>
           <button
             type="button"
@@ -881,7 +922,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm font-medium shadow-sm hover:bg-muted"
           >
             <FileDown className="h-4 w-4" />
-            Export CSV
+            {t('deviceCompare.actions.exportCsv')}
           </button>
           <button
             type="button"
@@ -889,7 +930,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90"
           >
             <Share2 className="h-4 w-4" />
-            {copied ? 'Link copied' : 'Share link'}
+            {copied ? t('deviceCompare.actions.linkCopied') : t('deviceCompare.actions.shareLink')}
           </button>
         </div>
       </div>
@@ -898,14 +939,14 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
         <div className="flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>Failed to load devices. {listError}</span>
+            <span>{listError}</span>
           </div>
           <button
             type="button"
             onClick={fetchAvailableDevices}
             className="shrink-0 rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium hover:bg-destructive/10"
           >
-            Retry
+            {t('deviceCompare.actions.retry')}
           </button>
         </div>
       )}
@@ -914,16 +955,16 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-4 lg:max-w-xl">
             <div>
-              <h2 className="text-lg font-semibold">Select devices (2-4)</h2>
+              <h2 className="text-lg font-semibold">{t('deviceCompare.selection.title')}</h2>
               <p className="text-sm text-muted-foreground">
-                Choose the devices you want to compare. Shareable URLs update automatically.
+                {t('deviceCompare.selection.description')}
               </p>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="search"
-                placeholder="Search by hostname"
+                placeholder={t('deviceCompare.selection.searchPlaceholder')}
                 value={query}
                 onChange={event => setQuery(event.target.value)}
                 className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -931,7 +972,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             </div>
             <div className="max-h-72 space-y-2 overflow-auto pr-1">
               {filteredDevices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No devices match your search.</p>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.selection.emptySearch')}</p>
               ) : (
                 filteredDevices.map(device => {
                   const isSelected = selectedIds.includes(device.id);
@@ -961,7 +1002,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{device.hostname}</span>
                             <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[device.status]}`}>
-                              {statusLabels[device.status]}
+                              {statusLabel(device.status, t)}
                             </span>
                           </div>
                           <div className="mt-1 text-xs text-muted-foreground">
@@ -975,7 +1016,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground">
-                          {disabled ? 'Limit reached' : 'Add'}
+                          {disabled ? t('deviceCompare.selection.limitReached') : t('deviceCompare.selection.add')}
                         </span>
                       )}
                     </button>
@@ -987,18 +1028,18 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
 
           <div className="w-full space-y-4 lg:max-w-sm">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Selected devices</h3>
+              <h3 className="text-sm font-semibold">{t('deviceCompare.selected.title')}</h3>
               <button
                 type="button"
                 onClick={handleClear}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Clear all
+                {t('deviceCompare.actions.clearAll')}
               </button>
             </div>
             {selectedIds.length === 0 ? (
               <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                Select at least two devices to start comparing.
+                {t('deviceCompare.selected.empty')}
               </div>
             ) : (
               <div className="space-y-2">
@@ -1012,7 +1053,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                       type="button"
                       onClick={() => handleToggleDevice(device.id)}
                       className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      aria-label={`Remove ${device.hostname}`}
+                      aria-label={t('deviceCompare.selected.remove', { hostname: device.hostname })}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -1022,8 +1063,8 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             )}
             <div className={`rounded-md border p-3 text-xs ${canCompare ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700' : 'border-muted text-muted-foreground'}`}>
               {canCompare
-                ? `Ready to compare ${selectedIds.length} devices.`
-                : 'Select at least two devices to unlock comparison views.'}
+                ? t('deviceCompare.selected.ready', { count: formatNumber(selectedIds.length, locale) })
+                : t('deviceCompare.selected.unlock')}
             </div>
           </div>
         </div>
@@ -1038,7 +1079,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       {loadingDetails && (
         <div className="flex items-center gap-3 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          Fetching comparison data...
+          {t('deviceCompare.loadingDetails')}
         </div>
       )}
 
@@ -1047,16 +1088,16 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Specs at a glance</h2>
-                <p className="text-sm text-muted-foreground">Side-by-side hardware and agent details.</p>
+                <h2 className="text-lg font-semibold">{t('deviceCompare.sections.specs')}</h2>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.sections.specsDescription')}</p>
               </div>
-              <span className="text-xs text-muted-foreground">{selectedIds.length} devices</span>
+              <span className="text-xs text-muted-foreground">{t('deviceCompare.counts.devices', { count: formatNumber(selectedIds.length, locale) })}</span>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2">Spec</th>
+                    <th className="py-2">{t('deviceCompare.spec.spec')}</th>
                     {selectedDevices.map(device => (
                       <th key={device.id} className="py-2">{device.hostname}</th>
                     ))}
@@ -1065,10 +1106,10 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                 <tbody>
                   {[
                     { label: 'OS', value: (device: DeviceComparisonData) => `${osLabels[device.os]} ${device.osVersion}` },
-                    { label: 'CPU', value: (device: DeviceComparisonData) => device.cpuModel || 'Unknown' },
-                    { label: 'RAM', value: (device: DeviceComparisonData) => device.totalRam || 'Unknown' },
-                    { label: 'Disk', value: (device: DeviceComparisonData) => device.diskTotal || 'Unknown' },
-                    { label: 'Agent Version', value: (device: DeviceComparisonData) => device.agentVersion || 'Unknown' }
+                    { label: 'CPU', value: (device: DeviceComparisonData) => device.cpuModel || t('deviceCompare.placeholders.unknown') },
+                    { label: 'RAM', value: (device: DeviceComparisonData) => device.totalRam || t('deviceCompare.placeholders.unknown') },
+                    { label: t('deviceCompare.spec.disk'), value: (device: DeviceComparisonData) => device.diskTotal || t('deviceCompare.placeholders.unknown') },
+                    { label: t('deviceCompare.spec.agentVersion'), value: (device: DeviceComparisonData) => device.agentVersion || t('deviceCompare.placeholders.unknown') }
                   ].map(row => (
                     <tr key={row.label} className="border-b last:border-0">
                       <td className="py-3 font-medium text-muted-foreground">{row.label}</td>
@@ -1085,16 +1126,16 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Software diff</h2>
-                <p className="text-sm text-muted-foreground">Common packages and software unique to each device.</p>
+                <h2 className="text-lg font-semibold">{t('deviceCompare.sections.softwareDiff')}</h2>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.sections.softwareDescription')}</p>
               </div>
-              <span className="text-xs text-muted-foreground">{softwareComparison.common.length} common apps</span>
+              <span className="text-xs text-muted-foreground">{t('deviceCompare.counts.commonApps', { count: formatNumber(softwareComparison.common.length, locale) })}</span>
             </div>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
               <div className="rounded-md border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold">Common software</h3>
+                <h3 className="text-sm font-semibold">{t('deviceCompare.software.commonSoftware')}</h3>
                 {softwareComparison.common.length === 0 ? (
-                  <p className="mt-3 text-xs text-muted-foreground">No shared software detected.</p>
+                  <p className="mt-3 text-xs text-muted-foreground">{t('deviceCompare.software.emptyCommon')}</p>
                 ) : (
                   <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
                     {softwareComparison.common.map(name => (
@@ -1107,9 +1148,9 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                 const unique = softwareComparison.uniqueByDevice[device.id] ?? [];
                 return (
                   <div key={device.id} className="rounded-md border p-4">
-                    <h3 className="text-sm font-semibold">Unique to {device.hostname}</h3>
+                    <h3 className="text-sm font-semibold">{t('deviceCompare.software.uniqueTo', { hostname: device.hostname })}</h3>
                     {unique.length === 0 ? (
-                      <p className="mt-3 text-xs text-muted-foreground">No unique software.</p>
+                      <p className="mt-3 text-xs text-muted-foreground">{t('deviceCompare.software.emptyUnique')}</p>
                     ) : (
                       <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
                         {unique.map(name => (
@@ -1126,10 +1167,10 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Patch status comparison</h2>
-                <p className="text-sm text-muted-foreground">Track missing and installed patches per device.</p>
+                <h2 className="text-lg font-semibold">{t('deviceCompare.sections.patchStatus')}</h2>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.sections.patchDescription')}</p>
               </div>
-              <span className="text-xs text-muted-foreground">{patchNames.length} patches tracked</span>
+              <span className="text-xs text-muted-foreground">{t('deviceCompare.counts.patchesTracked', { count: formatNumber(patchNames.length, locale) })}</span>
             </div>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {selectedDevices.map(device => {
@@ -1140,12 +1181,14 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                   <div key={device.id} className="rounded-md border p-4">
                     <h3 className="text-sm font-semibold">{device.hostname}</h3>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                      <div className="rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-700">{installed} installed</div>
-                      <div className="rounded-md bg-amber-500/10 px-2 py-1 text-amber-700">{pending} pending</div>
-                      <div className="rounded-md bg-red-500/10 px-2 py-1 text-red-700">{missing} missing</div>
+                      <div className="rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-700">{t('deviceCompare.patches.installedCount', { count: formatNumber(installed, locale) })}</div>
+                      <div className="rounded-md bg-amber-500/10 px-2 py-1 text-amber-700">{t('deviceCompare.patches.pendingCount', { count: formatNumber(pending, locale) })}</div>
+                      <div className="rounded-md bg-red-500/10 px-2 py-1 text-red-700">{t('deviceCompare.patches.missingCount', { count: formatNumber(missing, locale) })}</div>
                     </div>
                     <div className="mt-3 text-xs text-muted-foreground">
-                      Missing: {device.patches.filter(patch => patch.status === 'missing').map(patch => patch.name).join(', ') || 'None'}
+                      {t('deviceCompare.patches.missingList', {
+                        items: device.patches.filter(patch => patch.status === 'missing').map(patch => patch.name).join(', ') || t('deviceCompare.placeholders.none'),
+                      })}
                     </div>
                   </div>
                 );
@@ -1155,7 +1198,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2">Patch</th>
+                    <th className="py-2">{t('deviceCompare.patches.patch')}</th>
                     {selectedDevices.map(device => (
                       <th key={device.id} className="py-2">{device.hostname}</th>
                     ))}
@@ -1165,7 +1208,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                   {patchNames.length === 0 ? (
                     <tr>
                       <td colSpan={selectedDevices.length + 1} className="py-4 text-center text-sm text-muted-foreground">
-                        No patch data available.
+                        {t('deviceCompare.patches.empty')}
                       </td>
                     </tr>
                   ) : (
@@ -1174,13 +1217,6 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                         <td className="py-3 font-medium text-muted-foreground">{patch}</td>
                         {selectedDevices.map(device => {
                           const status = getPatchStatus(device.patches, patch);
-                          const statusLabel = status === 'installed'
-                            ? 'Installed'
-                            : status === 'missing'
-                            ? 'Missing'
-                            : status === 'pending'
-                            ? 'Pending'
-                            : 'Unknown';
                           const statusStyle = status === 'installed'
                             ? 'text-emerald-700'
                             : status === 'missing'
@@ -1190,7 +1226,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                             : 'text-muted-foreground';
 
                           return (
-                            <td key={device.id} className={`py-3 ${statusStyle}`}>{statusLabel}</td>
+                            <td key={device.id} className={`py-3 ${statusStyle}`}>{patchStatusLabel(status, t)}</td>
                           );
                         })}
                       </tr>
@@ -1204,8 +1240,8 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Configuration diff</h2>
-                <p className="text-sm text-muted-foreground">Compare configuration values across devices.</p>
+                <h2 className="text-lg font-semibold">{t('deviceCompare.sections.configDiff')}</h2>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.sections.configDescription')}</p>
               </div>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
@@ -1214,14 +1250,14 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                   onChange={event => setShowAllConfig(event.target.checked)}
                   className="h-4 w-4 rounded border"
                 />
-                Show all keys
+                {t('deviceCompare.config.showAllKeys')}
               </label>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2">Key</th>
+                    <th className="py-2">{t('deviceCompare.config.key')}</th>
                     {selectedDevices.map(device => (
                       <th key={device.id} className="py-2">{device.hostname}</th>
                     ))}
@@ -1231,7 +1267,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                   {configRows.length === 0 ? (
                     <tr>
                       <td colSpan={selectedDevices.length + 1} className="py-4 text-center text-sm text-muted-foreground">
-                        No configuration differences detected.
+                        {t('deviceCompare.config.empty')}
                       </td>
                     </tr>
                   ) : (
@@ -1252,12 +1288,12 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
           <div className="rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Performance comparison</h2>
-                <p className="text-sm text-muted-foreground">Compare CPU, RAM, and disk utilization trends.</p>
+                <h2 className="text-lg font-semibold">{t('deviceCompare.sections.performance')}</h2>
+                <p className="text-sm text-muted-foreground">{t('deviceCompare.sections.performanceDescription')}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex rounded-md border">
-                  {(['cpu', 'ram', 'disk'] as MetricKey[]).map(key => (
+                  {metricKeys.map(key => (
                     <button
                       key={key}
                       type="button"
@@ -1268,7 +1304,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      {key.toUpperCase()}
+                      {metricLabel(key, t)}
                     </button>
                   ))}
                 </div>
@@ -1277,8 +1313,8 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                   onChange={event => setTimeRange(event.target.value as TimeRange)}
                   className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  {Object.entries(timeRangeOptions).map(([value, option]) => (
-                    <option key={value} value={value}>{option.label}</option>
+                  {timeRanges.map((value) => (
+                    <option key={value} value={value}>{t(`deviceCompare.timeRanges.${value}`)}</option>
                   ))}
                 </select>
               </div>
@@ -1286,7 +1322,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
             <div className="mt-6 h-80">
               {chartData.length === 0 ? (
                 <div className="flex h-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-                  No performance data available.
+                  {t('deviceCompare.performance.empty')}
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1294,7 +1330,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis
                       dataKey="timestamp"
-                      tickFormatter={(value) => formatTimestamp(value as string, timeRange, effectiveTimezone)}
+                      tickFormatter={(value) => formatTimestamp(value as string, timeRange, locale, effectiveTimezone)}
                       tick={{ fontSize: 12 }}
                       className="text-muted-foreground"
                     />
@@ -1302,13 +1338,13 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
                       domain={[0, 100]}
                       tick={{ fontSize: 12 }}
                       className="text-muted-foreground"
-                      tickFormatter={(value) => `${value}%`}
+                      tickFormatter={(value) => `${formatNumber(value, locale)}%`}
                       width={40}
                     />
                     <Tooltip
                       wrapperClassName="chart-tooltip"
-                      labelFormatter={(value) => formatDateTime(String(value), effectiveTimezone)}
-                      formatter={(value: number, name: string) => [`${value}%`, name]}
+                      labelFormatter={(value) => formatDateTime(String(value), locale, effectiveTimezone)}
+                      formatter={(value: number, name: string) => [`${formatNumber(value, locale)}%`, name]}
                     />
                     <Legend
                       formatter={(value) => {
@@ -1339,7 +1375,7 @@ export default function DeviceCompare({ timezone }: DeviceCompareProps = {}) {
       {!canCompare && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-700">
           <AlertTriangle className="mt-0.5 h-4 w-4" />
-          Select at least two devices to access comparison details.
+          {t('deviceCompare.selected.accessDetails')}
         </div>
       )}
     </div>
