@@ -2131,6 +2131,11 @@ export const resources = {
         thirdParty: 'Third-party',
       },
     },
+    ringSelector: {
+      label: 'Update Ring:',
+      allRings: 'All Rings',
+      ringOption: '{{name}} (Order {{order}}, +{{days}}d)',
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -4730,6 +4735,11 @@ export const resources = {
         linux: 'Linux',
         thirdParty: 'Сторонние',
       },
+    },
+    ringSelector: {
+      label: 'Кольцо обновлений:',
+      allRings: 'Все кольца',
+      ringOption: '{{name}} (Порядок {{order}}, +{{days}} дн.)',
     },
     scripts: {
       picker: {
