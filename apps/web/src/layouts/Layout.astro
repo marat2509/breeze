@@ -3,6 +3,7 @@ import '../styles/globals.css';
 import { ClientRouter } from 'astro:transitions';
 import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
 import { translate } from '../i18n/resources';
+import { translatePageTitle } from '../i18n/pageTitles';
 
 interface Props {
   title: string;
@@ -12,6 +13,7 @@ interface Props {
 const { title, locale: propLocale } = Astro.props;
 const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
 const description = translate(locale, 'app.metaDescription');
+const localizedTitle = translatePageTitle(locale, title);
 const titleSuffix = translate(locale, 'app.titleSuffix');
 ---
 
@@ -32,7 +34,7 @@ const titleSuffix = translate(locale, 'app.titleSuffix');
       the script changes (see issue #618).
     -->
     <script is:inline src="/theme-bootstrap.js"></script>
-    <title>{title} | {titleSuffix}</title>
+    <title>{localizedTitle} | {titleSuffix}</title>
     <ClientRouter />
   </head>
   <body class="min-h-screen bg-background antialiased">

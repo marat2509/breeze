@@ -3,6 +3,7 @@ import '../styles/globals.css';
 import { ClientRouter } from 'astro:transitions';
 import { resolveLocaleFromRequest, type Locale } from '../i18n/locales';
 import { translate } from '../i18n/resources';
+import { translatePageTitle } from '../i18n/pageTitles';
 
 interface Props {
   title: string;
@@ -12,6 +13,7 @@ interface Props {
 const { title, locale: propLocale } = Astro.props;
 const locale = propLocale ?? resolveLocaleFromRequest(Astro.request);
 const description = translate(locale, 'app.metaDescription');
+const localizedTitle = translatePageTitle(locale, title);
 const titleSuffix = translate(locale, 'app.titleSuffix');
 ---
 
@@ -25,7 +27,7 @@ const titleSuffix = translate(locale, 'app.titleSuffix');
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <title>{title} | {titleSuffix}</title>
+    <title>{localizedTitle} | {titleSuffix}</title>
     <ClientRouter />
   </head>
   <body class="min-h-screen bg-background antialiased">
