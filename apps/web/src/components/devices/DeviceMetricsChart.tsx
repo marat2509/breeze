@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -11,8 +11,12 @@ import {
 } from 'recharts';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatNumber } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d';
+type MetricKey = 'cpu' | 'ram' | 'disk';
 
 type DeviceMetricsChartProps = {
   compact?: boolean;
@@ -26,33 +30,38 @@ type MetricDataPoint = {
   disk: number;
 };
 
-function formatTimestamp(timestamp: string, range: TimeRange): string {
+const timeRanges: TimeRange[] = ['1h', '6h', '24h', '7d', '30d'];
+
+function formatTimestamp(timestamp: string, range: TimeRange, locale: Locale): string {
   const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
 
   switch (range) {
     case '1h':
     case '6h':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date);
     case '24h':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date);
     case '7d':
-      return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
+      return new Intl.DateTimeFormat(locale, { weekday: 'short', hour: '2-digit' }).format(date);
     case '30d':
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(date);
     default:
-      return date.toLocaleTimeString();
+      return new Intl.DateTimeFormat(locale).format(date);
   }
 }
 
-const timeRangeLabels: Record<TimeRange, string> = {
-  '1h': 'Last Hour',
-  '6h': 'Last 6 Hours',
-  '24h': 'Last 24 Hours',
-  '7d': 'Last 7 Days',
-  '30d': 'Last 30 Days'
-};
+function metricLabel(metric: MetricKey, t: (key: string) => string): string {
+  return t(`deviceMetricsChart.metrics.${metric}`);
+}
+
+function formatPercent(value: number, locale: Locale): string {
+  return `${formatNumber(value, locale, { maximumFractionDigits: 1 })}%`;
+}
 
 export default function DeviceMetricsChart({ compact = false, deviceId }: DeviceMetricsChartProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [visibleMetrics, setVisibleMetrics] = useState({
     cpu: true,
@@ -63,9 +72,13 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const fetchMetrics = useCallback(async () => {
     if (!deviceId) {
-      setError('No device selected');
+      setError(tRef.current('deviceMetricsChart.errors.noDevice'));
       setIsLoading(false);
       return;
     }
@@ -82,13 +95,13 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
       }
 
       if (!response.ok) {
-        throw new Error('Failed to fetch metrics');
+        throw new Error(tRef.current('deviceMetricsChart.errors.fetch'));
       }
 
       const result = await response.json();
       setData(result.metrics || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load metrics');
+    } catch {
+      setError(tRef.current('deviceMetricsChart.errors.fetch'));
     } finally {
       setIsLoading(false);
     }
@@ -122,7 +135,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
             onClick={fetchMetrics}
             className="text-sm text-primary hover:underline"
           >
-            Try again
+            {t('deviceMetricsChart.retry')}
           </button>
         </div>
       </div>
@@ -133,14 +146,14 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
     return (
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Performance</h3>
+          <h3 className="text-sm font-semibold">{t('deviceMetricsChart.compactTitle')}</h3>
           <select
             value={timeRange}
             onChange={e => setTimeRange(e.target.value as TimeRange)}
             className="h-8 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            {Object.entries(timeRangeLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {timeRanges.map((value) => (
+              <option key={value} value={value}>{t(`deviceMetricsChart.timeRanges.${value}`)}</option>
             ))}
           </select>
         </div>
@@ -150,7 +163,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
                 dataKey="timestamp"
-                tickFormatter={(value) => formatTimestamp(value, timeRange)}
+                tickFormatter={(value) => formatTimestamp(value, timeRange, locale)}
                 tick={{ fontSize: 10 }}
                 className="text-muted-foreground"
                 interval="preserveStartEnd"
@@ -163,7 +176,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
               />
               <Tooltip
                 wrapperClassName="chart-tooltip"
-                labelFormatter={(value) => new Date(value).toLocaleString()}
+                labelFormatter={(value) => new Date(value).toLocaleString(locale)}
               />
               <Line
                 type="monotone"
@@ -171,7 +184,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
                 stroke="#3b82f6"
                 strokeWidth={2}
                 dot={false}
-                name="CPU"
+                name={metricLabel('cpu', t)}
               />
               <Line
                 type="monotone"
@@ -179,7 +192,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
                 stroke="#22c55e"
                 strokeWidth={2}
                 dot={false}
-                name="RAM"
+                name={metricLabel('ram', t)}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -192,9 +205,9 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Performance Metrics</h3>
+          <h3 className="text-lg font-semibold">{t('deviceMetricsChart.title')}</h3>
           <p className="text-sm text-muted-foreground">
-            Real-time system resource utilization
+            {t('deviceMetricsChart.description')}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -209,7 +222,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
               }`}
             >
               <span className="h-2 w-2 rounded-full bg-blue-500" />
-              CPU
+              {metricLabel('cpu', t)}
             </button>
             <button
               type="button"
@@ -221,7 +234,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
               }`}
             >
               <span className="h-2 w-2 rounded-full bg-green-500" />
-              RAM
+              {metricLabel('ram', t)}
             </button>
             <button
               type="button"
@@ -233,7 +246,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
               }`}
             >
               <span className="h-2 w-2 rounded-full bg-purple-500" />
-              Disk
+              {metricLabel('disk', t)}
             </button>
           </div>
           <select
@@ -241,8 +254,8 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
             onChange={e => setTimeRange(e.target.value as TimeRange)}
             className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            {Object.entries(timeRangeLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {timeRanges.map((value) => (
+              <option key={value} value={value}>{t(`deviceMetricsChart.timeRanges.${value}`)}</option>
             ))}
           </select>
         </div>
@@ -254,7 +267,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="timestamp"
-              tickFormatter={(value) => formatTimestamp(value, timeRange)}
+              tickFormatter={(value) => formatTimestamp(value, timeRange, locale)}
               tick={{ fontSize: 12 }}
               className="text-muted-foreground"
               interval="preserveStartEnd"
@@ -268,8 +281,8 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
             />
             <Tooltip
               wrapperClassName="chart-tooltip"
-              labelFormatter={(value) => new Date(value).toLocaleString()}
-              formatter={(value: number, name: string) => [`${value}%`, name]}
+              labelFormatter={(value) => new Date(value).toLocaleString(locale)}
+              formatter={(value: number, name: string) => [formatPercent(value, locale), name]}
             />
             <Legend />
             {visibleMetrics.cpu && (
@@ -279,7 +292,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
                 stroke="#3b82f6"
                 strokeWidth={2}
                 dot={false}
-                name="CPU"
+                name={metricLabel('cpu', t)}
                 activeDot={{ r: 4 }}
               />
             )}
@@ -290,7 +303,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
                 stroke="#22c55e"
                 strokeWidth={2}
                 dot={false}
-                name="RAM"
+                name={metricLabel('ram', t)}
                 activeDot={{ r: 4 }}
               />
             )}
@@ -301,7 +314,7 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
                 stroke="#a855f7"
                 strokeWidth={2}
                 dot={false}
-                name="Disk"
+                name={metricLabel('disk', t)}
                 activeDot={{ r: 4 }}
               />
             )}
@@ -313,45 +326,45 @@ export default function DeviceMetricsChart({ compact = false, deviceId }: Device
         <div className="rounded-md border p-4">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-blue-500" />
-            <span className="text-sm font-medium">CPU</span>
+            <span className="text-sm font-medium">{metricLabel('cpu', t)}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{data[data.length - 1]?.cpu ?? 0}%</span>
-            <span className="text-xs text-muted-foreground">current</span>
+            <span className="text-2xl font-bold">{formatPercent(data[data.length - 1]?.cpu ?? 0, locale)}</span>
+            <span className="text-xs text-muted-foreground">{t('deviceMetricsChart.current')}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Avg: {data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.cpu, 0) / data.length) : 0}% |
-            Max: {data.length > 0 ? Math.max(...data.map(d => d.cpu)) : 0}%
+            {t('deviceMetricsChart.avg')}: {formatPercent(data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.cpu, 0) / data.length) : 0, locale)} |
+            {t('deviceMetricsChart.max')}: {formatPercent(data.length > 0 ? Math.max(...data.map(d => d.cpu)) : 0, locale)}
           </div>
         </div>
 
         <div className="rounded-md border p-4">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-green-500" />
-            <span className="text-sm font-medium">RAM</span>
+            <span className="text-sm font-medium">{metricLabel('ram', t)}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{data[data.length - 1]?.ram ?? 0}%</span>
-            <span className="text-xs text-muted-foreground">current</span>
+            <span className="text-2xl font-bold">{formatPercent(data[data.length - 1]?.ram ?? 0, locale)}</span>
+            <span className="text-xs text-muted-foreground">{t('deviceMetricsChart.current')}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Avg: {data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.ram, 0) / data.length) : 0}% |
-            Max: {data.length > 0 ? Math.max(...data.map(d => d.ram)) : 0}%
+            {t('deviceMetricsChart.avg')}: {formatPercent(data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.ram, 0) / data.length) : 0, locale)} |
+            {t('deviceMetricsChart.max')}: {formatPercent(data.length > 0 ? Math.max(...data.map(d => d.ram)) : 0, locale)}
           </div>
         </div>
 
         <div className="rounded-md border p-4">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-purple-500" />
-            <span className="text-sm font-medium">Disk</span>
+            <span className="text-sm font-medium">{metricLabel('disk', t)}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{data[data.length - 1]?.disk ?? 0}%</span>
-            <span className="text-xs text-muted-foreground">current</span>
+            <span className="text-2xl font-bold">{formatPercent(data[data.length - 1]?.disk ?? 0, locale)}</span>
+            <span className="text-xs text-muted-foreground">{t('deviceMetricsChart.current')}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Avg: {data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.disk, 0) / data.length * 10) / 10 : 0}% |
-            Max: {data.length > 0 ? Math.max(...data.map(d => d.disk)) : 0}%
+            {t('deviceMetricsChart.avg')}: {formatPercent(data.length > 0 ? Math.round(data.reduce((sum, d) => sum + d.disk, 0) / data.length * 10) / 10 : 0, locale)} |
+            {t('deviceMetricsChart.max')}: {formatPercent(data.length > 0 ? Math.max(...data.map(d => d.disk)) : 0, locale)}
           </div>
         </div>
       </div>

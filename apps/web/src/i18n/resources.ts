@@ -1353,6 +1353,31 @@ export const resources = {
         fetch: 'Failed to fetch activities',
       },
     },
+    deviceMetricsChart: {
+      retry: 'Try again',
+      compactTitle: 'Performance',
+      title: 'Performance Metrics',
+      description: 'Real-time system resource utilization',
+      current: 'current',
+      avg: 'Avg',
+      max: 'Max',
+      timeRanges: {
+        '1h': 'Last Hour',
+        '6h': 'Last 6 Hours',
+        '24h': 'Last 24 Hours',
+        '7d': 'Last 7 Days',
+        '30d': 'Last 30 Days',
+      },
+      metrics: {
+        cpu: 'CPU',
+        ram: 'RAM',
+        disk: 'Disk',
+      },
+      errors: {
+        noDevice: 'No device selected',
+        fetch: 'Failed to load metrics',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -3173,6 +3198,31 @@ export const resources = {
       },
       errors: {
         fetch: 'Не удалось загрузить активности',
+      },
+    },
+    deviceMetricsChart: {
+      retry: 'Повторить',
+      compactTitle: 'Производительность',
+      title: 'Метрики производительности',
+      description: 'Использование системных ресурсов в реальном времени',
+      current: 'текущее',
+      avg: 'Среднее',
+      max: 'Макс',
+      timeRanges: {
+        '1h': 'Последний час',
+        '6h': 'Последние 6 часов',
+        '24h': 'Последние 24 часа',
+        '7d': 'Последние 7 дней',
+        '30d': 'Последние 30 дней',
+      },
+      metrics: {
+        cpu: 'CPU',
+        ram: 'RAM',
+        disk: 'Диск',
+      },
+      errors: {
+        noDevice: 'Устройство не выбрано',
+        fetch: 'Не удалось загрузить метрики',
       },
     },
     scripts: {
