@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock3, Network, RefreshCw, Search, X } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { formatDate, formatNumber } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 type IPAssignmentType = 'dhcp' | 'static' | 'vpn' | 'link-local' | 'unknown';
 type IPType = 'ipv4' | 'ipv6';
+type Translate = (key: string, params?: TranslationParams) => string;
 
 type DeviceIpHistoryEntry = {
   id?: string;
@@ -35,11 +40,9 @@ const ASSIGNMENT_TYPES: Array<'all' | IPAssignmentType> = ['all', 'dhcp', 'stati
 const PAGE_SIZE = 25;
 const MAX_FETCH_LIMIT = 500;
 
-function formatDateTime(value?: string | null): string {
+function formatDateTime(value: string | null | undefined, locale: Locale): string {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
+  return formatDate(value, locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -48,13 +51,13 @@ function formatDateTime(value?: string | null): string {
   });
 }
 
-function formatAssignment(value?: string): string {
-  if (!value) return 'Unknown';
-  if (value === 'dhcp') return 'DHCP';
-  if (value === 'vpn') return 'VPN';
-  if (value === 'link-local') return 'Link-local';
-  if (value === 'static') return 'Static';
-  return 'Unknown';
+function formatAssignment(value: string | undefined, t: Translate): string {
+  const key = ASSIGNMENT_TYPES.includes(value as IPAssignmentType) && value !== 'all' ? value : 'unknown';
+  return t(`deviceIpHistory.assignmentTypes.${key}`);
+}
+
+function formatIpType(value: IPType | undefined, t: Translate): string {
+  return t(`deviceIpHistory.ipTypes.${value === 'ipv6' ? 'ipv6' : 'ipv4'}`);
 }
 
 function badgeClassForAssignment(value?: string): string {
@@ -73,6 +76,8 @@ function badgeClassForAssignment(value?: string): string {
 }
 
 export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [entries, setEntries] = useState<DeviceIpHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -87,6 +92,10 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
   const [untilDate, setUntilDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const fetchIpHistory = useCallback(async () => {
     setLoading(true);
     setError(undefined);
@@ -99,11 +108,11 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
       const response = await fetchWithAuth(`/devices/${deviceId}/ip-history?${params.toString()}`);
       if (!response.ok) {
         if (response.status === 404) {
-          setError('IP history tracking is not available for this device');
+          setError(tRef.current('deviceIpHistory.errors.notAvailable'));
         } else if (response.status === 403) {
-          setError('You do not have permission to view IP history');
+          setError(tRef.current('deviceIpHistory.errors.forbidden'));
         } else {
-          setError(`Failed to load IP history (HTTP ${response.status})`);
+          setError(tRef.current('deviceIpHistory.errors.fetchStatus', { status: response.status }));
         }
         return;
       }
@@ -111,8 +120,8 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
       const payload = json.data ?? [];
       setEntries(Array.isArray(payload) ? payload : []);
       setFetchedCount(typeof json.count === 'number' ? json.count : Array.isArray(payload) ? payload.length : 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch IP history');
+    } catch {
+      setError(tRef.current('deviceIpHistory.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -207,12 +216,19 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
     untilDate
   );
 
+  const countLabel = filteredRows.length === fetchedCount
+    ? formatNumber(fetchedCount, locale)
+    : t('deviceIpHistory.filteredCount', {
+      filtered: formatNumber(filteredRows.length, locale),
+      total: formatNumber(fetchedCount, locale),
+    });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading IP history...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceIpHistory.loading')}</p>
         </div>
       </div>
     );
@@ -227,7 +243,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           onClick={fetchIpHistory}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Retry
+          {t('deviceIpHistory.retry')}
         </button>
       </div>
     );
@@ -238,9 +254,9 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Network className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">IP Assignment History</h3>
+          <h3 className="text-lg font-semibold">{t('deviceIpHistory.title')}</h3>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            {filteredRows.length === fetchedCount ? fetchedCount : `${filteredRows.length} / ${fetchedCount}`}
+            {countLabel}
           </span>
         </div>
         <button
@@ -249,7 +265,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
+          {t('deviceIpHistory.refresh')}
         </button>
       </div>
 
@@ -258,7 +274,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search IP, interface, gateway, DNS..."
+            placeholder={t('deviceIpHistory.searchPlaceholder')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -272,7 +288,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
         >
           {ASSIGNMENT_TYPES.map((value) => (
             <option key={value} value={value}>
-              {value === 'all' ? 'All Assignments' : formatAssignment(value)}
+              {value === 'all' ? t('deviceIpHistory.allAssignments') : formatAssignment(value, t)}
             </option>
           ))}
         </select>
@@ -282,7 +298,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           onChange={(event) => setInterfaceFilter(event.target.value)}
           className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
-          <option value="all">All Interfaces</option>
+          <option value="all">{t('deviceIpHistory.allInterfaces')}</option>
           {interfaceNames.map((name) => (
             <option key={name} value={name}>
               {name}
@@ -295,9 +311,9 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           onChange={(event) => setIpTypeFilter(event.target.value as 'all' | IPType)}
           className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
-          <option value="all">All IP Types</option>
-          <option value="ipv4">IPv4</option>
-          <option value="ipv6">IPv6</option>
+          <option value="all">{t('deviceIpHistory.allIpTypes')}</option>
+          <option value="ipv4">{formatIpType('ipv4', t)}</option>
+          <option value="ipv6">{formatIpType('ipv6', t)}</option>
         </select>
 
         <label className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
@@ -307,14 +323,14 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
             checked={activeOnly}
             onChange={(event) => setActiveOnly(event.target.checked)}
           />
-          Active only
+          {t('deviceIpHistory.activeOnly')}
         </label>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <Clock3 className="h-4 w-4" />
-          Since
+          {t('deviceIpHistory.since')}
           <input
             type="date"
             value={sinceDate}
@@ -323,7 +339,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           />
         </label>
         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          Until
+          {t('deviceIpHistory.until')}
           <input
             type="date"
             value={untilDate}
@@ -338,7 +354,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
             className="inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
-            Clear filters
+            {t('deviceIpHistory.clearFilters')}
           </button>
         )}
       </div>
@@ -348,20 +364,20 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
           <table className="min-w-full divide-y">
             <thead className="sticky top-0 bg-muted/40">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Interface</th>
-                <th className="px-4 py-3">IP Address</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Assignment</th>
-                <th className="px-4 py-3">First Seen</th>
-                <th className="px-4 py-3">Last Seen</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.interface')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.ipAddress')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.type')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.assignment')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.firstSeen')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.lastSeen')}</th>
+                <th className="px-4 py-3">{t('deviceIpHistory.columns.status')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {paginatedRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                    {hasFilters ? 'No IP assignments match your filters.' : 'No IP history reported yet.'}
+                    {hasFilters ? t('deviceIpHistory.emptyFiltered') : t('deviceIpHistory.empty')}
                   </td>
                 </tr>
               ) : (
@@ -371,21 +387,21 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.ipAddress ?? '—'}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex rounded px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
-                        {(row.ipType ?? 'ipv4').toUpperCase()}
+                        {formatIpType(row.ipType, t)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${badgeClassForAssignment(row.assignmentType)}`}>
-                        {formatAssignment(row.assignmentType)}
+                        {formatAssignment(row.assignmentType, t)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(row.firstSeen)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(row.lastSeen)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(row.firstSeen, locale)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(row.lastSeen, locale)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${
                         row.isActive ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'
                       }`}>
-                        {row.isActive ? 'Active' : 'Inactive'}
+                        {row.isActive ? t('deviceIpHistory.status.active') : t('deviceIpHistory.status.inactive')}
                       </span>
                     </td>
                   </tr>
@@ -399,7 +415,11 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} - {Math.min(startIndex + PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+            {t('deviceIpHistory.pagination.showing', {
+              start: formatNumber(startIndex + 1, locale),
+              end: formatNumber(Math.min(startIndex + PAGE_SIZE, filteredRows.length), locale),
+              total: formatNumber(filteredRows.length, locale),
+            })}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -408,7 +428,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
               disabled={currentPage === 1}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              First
+              {t('deviceIpHistory.pagination.first')}
             </button>
             <button
               type="button"
@@ -419,7 +439,10 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="min-w-[100px] text-center text-sm">
-              Page {currentPage} of {totalPages}
+              {t('deviceIpHistory.pagination.page', {
+                page: formatNumber(currentPage, locale),
+                total: formatNumber(totalPages, locale),
+              })}
             </span>
             <button
               type="button"
@@ -435,7 +458,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
               disabled={currentPage === totalPages}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Last
+              {t('deviceIpHistory.pagination.last')}
             </button>
           </div>
         </div>
@@ -443,7 +466,7 @@ export default function DeviceIpHistoryTab({ deviceId }: DeviceIpHistoryTabProps
 
       {fetchedCount >= MAX_FETCH_LIMIT && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Showing the most recent {MAX_FETCH_LIMIT} assignments. Narrow filters to inspect specific ranges.
+          {t('deviceIpHistory.limitNotice', { count: formatNumber(MAX_FETCH_LIMIT, locale) })}
         </p>
       )}
     </div>
