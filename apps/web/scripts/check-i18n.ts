@@ -152,6 +152,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/scripts/ScriptParametersForm.tsx',
   'src/components/scripts/ScriptEditPage.tsx',
   'src/components/scripts/ScriptExecutionsPage.tsx',
+  'src/components/scripts/ScriptList.tsx',
   'src/components/scripts/ScriptTagManager.tsx',
   'src/components/scripts/ScriptTemplateGallery.tsx',
   'src/components/scripts/ScriptVersionHistory.tsx',
