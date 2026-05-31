@@ -2026,6 +2026,34 @@ export const resources = {
         reboot: 'Reboot',
       },
     },
+    patchApprovalModal: {
+      title: 'Review Patch',
+      actions: {
+        close: 'Close',
+        cancel: 'Cancel',
+        approve: {
+          label: 'Approve',
+          description: 'Allow this patch to be deployed automatically or in the next maintenance window.',
+        },
+        decline: {
+          label: 'Decline',
+          description: 'Block this patch from deploying until it is reviewed again.',
+        },
+        defer: {
+          label: 'Defer',
+          description: 'Postpone the decision and revisit later.',
+        },
+      },
+      fields: {
+        notes: 'Notes',
+        notesPlaceholder: 'Add context or a reason for the decision...',
+        deferUntil: 'Defer Until',
+      },
+      errors: {
+        deferUntilRequired: 'Choose when the patch should be deferred until',
+        updateFailed: 'Failed to update patch approval',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -4519,6 +4547,34 @@ export const resources = {
         installed: 'Установлено',
         failed: 'Ошибка',
         reboot: 'Перезагрузка',
+      },
+    },
+    patchApprovalModal: {
+      title: 'Проверка патча',
+      actions: {
+        close: 'Закрыть',
+        cancel: 'Отмена',
+        approve: {
+          label: 'Одобрить',
+          description: 'Разрешить автоматическое развёртывание патча или установку в ближайшее окно обслуживания.',
+        },
+        decline: {
+          label: 'Отклонить',
+          description: 'Заблокировать установку патча до повторной проверки.',
+        },
+        defer: {
+          label: 'Отложить',
+          description: 'Перенести решение и вернуться к нему позже.',
+        },
+      },
+      fields: {
+        notes: 'Примечания',
+        notesPlaceholder: 'Добавьте контекст или причину решения...',
+        deferUntil: 'Отложить до',
+      },
+      errors: {
+        deferUntilRequired: 'Выберите, до какого времени отложить патч',
+        updateFailed: 'Не удалось обновить решение по патчу',
       },
     },
     scripts: {

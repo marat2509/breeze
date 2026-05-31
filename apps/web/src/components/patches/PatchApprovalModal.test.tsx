@@ -8,6 +8,10 @@ vi.mock('../../stores/auth', () => ({
   fetchWithAuth: vi.fn(),
 }));
 
+vi.mock('@/lib/navigation', () => ({
+  navigateTo: vi.fn(),
+}));
+
 const fetchMock = vi.mocked(fetchWithAuth);
 
 const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500): Response =>
@@ -18,13 +22,44 @@ const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500):
     json: vi.fn().mockResolvedValue(payload),
   }) as unknown as Response;
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 describe('PatchApprovalModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    window.localStorage.setItem('breeze_locale', 'ru');
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
     fetchMock.mockResolvedValue(makeJsonResponse({ id: 'patch-1', status: 'deferred' }));
   });
 
-  it('sends deferUntil when deferring a patch', async () => {
+  it('renders Russian labels and sends deferUntil when deferring a patch', async () => {
     const deferUntilLocal = '2026-04-08T09:00';
 
     render(
@@ -44,11 +79,17 @@ describe('PatchApprovalModal', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Defer/i }));
-    fireEvent.change(screen.getByLabelText(/Defer Until/i), {
+    expect(screen.getByRole('dialog', { name: 'Проверка патча' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Проверка патча' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeInTheDocument();
+    expect(screen.getByText('Примечания')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Добавьте контекст или причину решения...')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Отложить/i }));
+    fireEvent.change(screen.getByLabelText(/Отложить до/i), {
       target: { value: deferUntilLocal },
     });
-    fireEvent.click(screen.getAllByRole('button', { name: /Defer/i }).at(-1)!);
+    fireEvent.click(screen.getAllByRole('button', { name: /Отложить/i }).at(-1)!);
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -65,7 +106,7 @@ describe('PatchApprovalModal', () => {
     );
   });
 
-  it('surfaces backend approval errors instead of a generic message', async () => {
+  it('localizes known backend approval errors', async () => {
     fetchMock.mockResolvedValueOnce(makeJsonResponse({ error: 'Ring access denied' }, false, 403));
 
     render(
@@ -85,8 +126,8 @@ describe('PatchApprovalModal', () => {
       />
     );
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Approve/i }).at(-1)!);
+    fireEvent.click(screen.getAllByRole('button', { name: /Одобрить/i }).at(-1)!);
 
-    expect(await screen.findByText('Ring access denied')).toBeTruthy();
+    expect(await screen.findByText('У вас нет прав для выполнения этого действия.')).toBeTruthy();
   });
 });
