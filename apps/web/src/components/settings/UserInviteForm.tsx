@@ -2,12 +2,14 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
 
-const inviteSchema = z
-  .object({
-    email: z.string().email('Enter a valid email address'),
-    name: z.string().min(1, 'Name is required').max(255),
-    roleId: z.string().min(1, 'Select a role'),
+const createInviteSchema = (t: (key: string) => string) =>
+  z.object({
+    email: z.string().email(t('settings.users.validation.email')),
+    name: z.string().min(1, t('settings.users.validation.nameRequired')).max(255),
+    roleId: z.string().min(1, t('settings.users.validation.roleRequired')),
     orgAccess: z.enum(['all', 'selected', 'none']).optional(),
     orgIds: z.string().optional()
   })
@@ -16,12 +18,12 @@ const inviteSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['orgIds'],
-        message: 'Provide at least one organization'
+        message: t('settings.users.validation.organizationRequired')
       });
     }
   });
 
-type InviteFormValues = z.infer<typeof inviteSchema>;
+type InviteFormValues = z.infer<ReturnType<typeof createInviteSchema>>;
 
 export type RoleOption = {
   id: string;
@@ -43,6 +45,7 @@ type UserInviteFormProps = {
   errorMessage?: string;
   submitLabel?: string;
   loading?: boolean;
+  locale?: Locale;
   title?: string;
   description?: string;
   showOrgAccess?: boolean;
@@ -55,12 +58,15 @@ export default function UserInviteForm({
   onSubmit,
   onCancel,
   errorMessage,
-  submitLabel = 'Send invite',
+  submitLabel,
   loading,
-  title = 'Invite user',
-  description = 'Send an invitation with the right access for their role.',
+  locale: initialLocale = 'en',
+  title,
+  description,
   showOrgAccess = false
 }: UserInviteFormProps) {
+  const { t } = useI18n(initialLocale);
+  const inviteSchema = useMemo(() => createInviteSchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -136,8 +142,8 @@ export default function UserInviteForm({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
       <div className="w-full max-w-lg rounded-lg border bg-card p-6 shadow-sm">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <h2 className="text-lg font-semibold">{title ?? t('settings.users.inviteUser')}</h2>
+          <p className="text-sm text-muted-foreground">{description ?? t('settings.users.inviteDescription')}</p>
         </div>
 
         <form
@@ -149,13 +155,13 @@ export default function UserInviteForm({
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="invite-name" className="text-sm font-medium">
-                Name
+                {t('settings.users.name')}
               </label>
               <input
                 id="invite-name"
                 type="text"
                 autoComplete="name"
-                placeholder="Jane Smith"
+                placeholder={t('settings.users.namePlaceholder')}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 {...register('name')}
               />
@@ -166,13 +172,13 @@ export default function UserInviteForm({
 
             <div className="space-y-2">
               <label htmlFor="invite-email" className="text-sm font-medium">
-                Email
+                {t('settings.users.email')}
               </label>
               <input
                 id="invite-email"
                 type="email"
                 autoComplete="email"
-                placeholder="name@company.com"
+                placeholder={t('settings.users.emailPlaceholder')}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 {...register('email')}
               />
@@ -184,7 +190,7 @@ export default function UserInviteForm({
 
           <div className="space-y-2">
             <label htmlFor="invite-role" className="text-sm font-medium">
-              Role
+                {t('settings.users.role')}
             </label>
             <select
               id="invite-role"
@@ -203,23 +209,23 @@ export default function UserInviteForm({
           {showOrgSettings && (
             <div className="space-y-3 rounded-md border bg-muted/30 p-4">
               <div>
-                <h3 className="text-sm font-semibold">Organization access</h3>
+                <h3 className="text-sm font-semibold">{t('settings.users.organizationAccess')}</h3>
                 <p className="text-xs text-muted-foreground">
-                  Choose which organizations a partner can access.
+                  {t('settings.users.organizationAccessDescription')}
                 </p>
               </div>
               <div className="space-y-2">
                 <label htmlFor="invite-access" className="text-sm font-medium">
-                  Access level
+                  {t('settings.users.accessLevel')}
                 </label>
                 <select
                   id="invite-access"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   {...register('orgAccess')}
                 >
-                  <option value="all">All organizations</option>
-                  <option value="selected">Specific organizations</option>
-                  <option value="none">No organization access</option>
+                  <option value="all">{t('settings.users.accessAll')}</option>
+                  <option value="selected">{t('settings.users.accessSelected')}</option>
+                  <option value="none">{t('settings.users.accessNone')}</option>
                 </select>
                 {errors.orgAccess && (
                   <p className="text-sm text-destructive">{errors.orgAccess.message}</p>
@@ -228,7 +234,7 @@ export default function UserInviteForm({
               {orgAccessValue === 'selected' && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Organizations
+                    {t('settings.users.organizations')}
                   </label>
                   {/* Selected org chips */}
                   {selectedOrgIds.length > 0 && (
@@ -245,7 +251,7 @@ export default function UserInviteForm({
                               type="button"
                               onClick={() => removeOrg(id)}
                               className="ml-0.5 rounded-sm hover:text-destructive"
-                              aria-label={`Remove ${org?.name ?? id}`}
+                              aria-label={t('settings.users.removeOrganization', { name: org?.name ?? id })}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
                                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -267,7 +273,7 @@ export default function UserInviteForm({
                         setOrgDropdownOpen(true);
                       }}
                       onFocus={() => setOrgDropdownOpen(true)}
-                      placeholder="Search organizations..."
+                      placeholder={t('settings.users.searchOrganizations')}
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                     {orgDropdownOpen && (
@@ -275,8 +281,8 @@ export default function UserInviteForm({
                         {filteredOrgs.length === 0 ? (
                           <p className="px-3 py-2 text-sm text-muted-foreground">
                             {organizations.length === 0
-                              ? 'No organizations available'
-                              : 'No matching organizations'}
+                              ? t('settings.users.noOrganizations')
+                              : t('settings.users.noMatchingOrganizations')}
                           </p>
                         ) : (
                           filteredOrgs.map(org => (
@@ -315,14 +321,14 @@ export default function UserInviteForm({
               onClick={() => onCancel?.()}
               className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isLoading}
               className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? 'Sending...' : submitLabel}
+              {isLoading ? t('settings.users.sending') : (submitLabel ?? t('settings.users.sendInvite'))}
             </button>
           </div>
         </form>

@@ -191,6 +191,9 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/settings/PartnerSettingsPage.tsx',
   'src/components/settings/PartnerSettingsCard.tsx',
   'src/components/settings/ProfilePage.tsx',
+  'src/components/settings/UserInviteForm.tsx',
+  'src/components/settings/UserList.tsx',
+  'src/components/settings/UsersPage.tsx',
   'src/components/shared/McpUrlCard.tsx',
   'src/layouts/AuthLayout.astro',
   'src/layouts/AuthShellBranded.astro',
@@ -211,6 +214,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/pages/settings/custom-fields.astro',
   'src/pages/settings/enrollment-keys.astro',
   'src/pages/settings/index.astro',
+  'src/pages/settings/users.astro',
   'src/pages/setup.astro',
 ];
 
