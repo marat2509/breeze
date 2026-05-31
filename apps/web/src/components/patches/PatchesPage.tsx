@@ -15,6 +15,7 @@ import { navigateTo } from '@/lib/navigation';
 import { normalizePatch, normalizeRing } from './patchHelpers';
 import { extractApiError } from '@/lib/apiError';
 import { showToast } from '../shared/Toast';
+import { useI18n } from '@/i18n/react';
 
 type TabKey = 'rings' | 'patches' | 'compliance';
 const validTabs: TabKey[] = ['rings', 'patches', 'compliance'];
@@ -40,6 +41,7 @@ function setTabInUrl(tab: TabKey) {
 const DEVICE_SCAN_PAGE_LIMIT = 100;
 
 export default function PatchesPage() {
+  const { t } = useI18n();
   const [activeTab, setActiveTabState] = useState<TabKey>(getTabFromUrl);
   const setActiveTab = useCallback((tab: TabKey) => {
     setActiveTabState(tab);
@@ -65,11 +67,11 @@ export default function PatchesPage() {
 
   const tabs = useMemo(
     () => [
-      { id: 'compliance' as TabKey, label: 'Compliance', icon: <BarChart3 className="h-4 w-4" /> },
-      { id: 'patches' as TabKey, label: 'Patches', icon: <FileCog className="h-4 w-4" /> },
-      { id: 'rings' as TabKey, label: 'Update Rings', icon: <Layers className="h-4 w-4" /> }
+      { id: 'compliance' as TabKey, label: t('patchesPage.tabs.compliance'), icon: <BarChart3 className="h-4 w-4" /> },
+      { id: 'patches' as TabKey, label: t('patchesPage.tabs.patches'), icon: <FileCog className="h-4 w-4" /> },
+      { id: 'rings' as TabKey, label: t('patchesPage.tabs.rings'), icon: <Layers className="h-4 w-4" /> }
     ],
-    []
+    [t]
   );
 
   // Ring selector data (simplified for dropdown)
@@ -94,7 +96,7 @@ export default function PatchesPage() {
       const response = await fetchWithAuth('/update-rings');
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        throw new Error('Failed to fetch update rings');
+        throw new Error(t('patchesPage.errors.fetchRings'));
       }
       const data = await response.json();
       const ringData = data.data ?? data ?? [];
@@ -103,11 +105,11 @@ export default function PatchesPage() {
         : [];
       setRings(normalized);
     } catch (err) {
-      setRingsError(err instanceof Error ? err.message : 'Failed to fetch update rings');
+      setRingsError(err instanceof Error ? err.message : t('patchesPage.errors.fetchRings'));
     } finally {
       setRingsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchPatches = useCallback(async () => {
     try {
@@ -121,7 +123,7 @@ export default function PatchesPage() {
       const response = await fetchWithAuth(url);
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        throw new Error('Failed to fetch patches');
+        throw new Error(t('patchesPage.errors.fetchPatches'));
       }
       const data = await response.json();
       const patchData = data.data ?? data.patches ?? data.items ?? data ?? [];
@@ -135,11 +137,11 @@ export default function PatchesPage() {
         setSourceCounts({});
       }
     } catch (err) {
-      setPatchesError(err instanceof Error ? err.message : 'Failed to fetch patches');
+      setPatchesError(err instanceof Error ? err.message : t('patchesPage.errors.fetchPatches'));
     } finally {
       setPatchesLoading(false);
     }
-  }, [selectedRingId]);
+  }, [selectedRingId, t]);
 
   useEffect(() => {
     fetchRings();
@@ -194,7 +196,10 @@ export default function PatchesPage() {
       )
     );
     if (failedIds.length > 0) {
-      throw new Error(`Failed to approve ${failedIds.length} ${failedIds.length === 1 ? 'patch' : 'patches'}`);
+      throw new Error(t('patchesPage.errors.approveCount', {
+        count: failedIds.length,
+        patchNoun: failedIds.length === 1 ? t('patchesPage.scan.patchOne') : t('patchesPage.scan.patchMany'),
+      }));
     }
   };
 
@@ -217,7 +222,7 @@ export default function PatchesPage() {
         declined.includes(patch.id) ? { ...patch, approvalStatus: 'declined' as PatchApprovalStatus } : patch
       )
     );
-    if (failed.length > 0) throw new Error(`Failed to decline ${failed.length} patches`);
+    if (failed.length > 0) throw new Error(t('patchesPage.errors.declineCount', { count: failed.length }));
   };
 
   const handleScan = async () => {
@@ -231,7 +236,7 @@ export default function PatchesPage() {
         const devResponse = await fetchWithAuth(`/devices?limit=${DEVICE_SCAN_PAGE_LIMIT}&page=${page}`);
         if (!devResponse.ok) {
           if (devResponse.status === 401) { void navigateTo('/login', { replace: true }); return; }
-          throw new Error('Failed to load devices for scan');
+          throw new Error(t('patchesPage.errors.loadDevicesForScan'));
         }
 
         const devBody = await devResponse.json();
@@ -251,7 +256,7 @@ export default function PatchesPage() {
       }
 
       const deviceIds = [...ids];
-      if (deviceIds.length === 0) throw new Error('No devices available for scanning');
+      if (deviceIds.length === 0) throw new Error(t('patchesPage.errors.noDevicesForScanning'));
 
       // /patches/scan is an AGGREGATE / partial-success endpoint: a body
       // `success:false` can still mean "most devices were queued", and skipped
@@ -276,7 +281,7 @@ export default function PatchesPage() {
       } | null;
 
       if (!scanRes.ok || !scanBody) {
-        showToast({ message: extractApiError(scanBody, 'Patch scan failed'), type: 'error' });
+        showToast({ message: extractApiError(scanBody, t('patchesPage.errors.patchScanFailed')), type: 'error' });
         return;
       }
 
@@ -287,16 +292,20 @@ export default function PatchesPage() {
       const skipped =
         (scanBody.skipped?.missingDeviceIds?.length ?? 0) +
         (scanBody.skipped?.inaccessibleDeviceIds?.length ?? 0);
-      const noun = (n: number) => (n === 1 ? 'device' : 'devices');
+      const deviceNoun = (n: number) => n === 1 ? t('patchesPage.scan.deviceOne') : t('patchesPage.scan.deviceMany');
       const shortfall = [
-        failed > 0 ? `${failed} failed to queue` : null,
-        skipped > 0 ? `${skipped} skipped (no access / not found)` : null,
+        failed > 0 ? t('patchesPage.scan.failedToQueue', { count: failed }) : null,
+        skipped > 0 ? t('patchesPage.scan.skipped', { count: skipped }) : null,
       ].filter(Boolean).join(', ');
 
       if (queued === 0) {
         // Nothing was queued — a genuine failure even though HTTP is 200.
         showToast({
-          message: `Patch scan failed: 0 of ${requested} ${noun(requested)} queued${shortfall ? ` (${shortfall})` : ''}.`,
+          message: t('patchesPage.scan.failedZeroQueued', {
+            requested,
+            deviceNoun: deviceNoun(requested),
+            shortfallSuffix: shortfall ? t('patchesPage.scan.shortfallSuffix', { shortfall }) : '',
+          }),
           type: 'error',
         });
         return;
@@ -307,12 +316,21 @@ export default function PatchesPage() {
         // has no "warning" variant; use error styling so a partial run is not
         // mistaken for a clean success.
         showToast({
-          message: `Patch scan queued for ${queued} of ${requested} ${noun(requested)} — ${shortfall}.`,
+          message: t('patchesPage.scan.partialQueued', {
+            queued,
+            requested,
+            deviceNoun: deviceNoun(requested),
+            shortfall,
+          }),
           type: 'error',
         });
       } else {
         showToast({
-          message: `Patch scan queued for ${queued} ${noun(queued)}${dispatched > 0 ? `, ${dispatched} dispatched immediately` : ''}.`,
+          message: t('patchesPage.scan.successQueued', {
+            queued,
+            deviceNoun: deviceNoun(queued),
+            dispatchedSuffix: dispatched > 0 ? t('patchesPage.scan.dispatchedSuffix', { dispatched }) : '',
+          }),
           type: 'success',
         });
       }
@@ -322,7 +340,7 @@ export default function PatchesPage() {
       // call above surfaces its own outcome and never throws; a 401 from the
       // device-paging GET already redirected and returned before reaching here.
       showToast({
-        message: err instanceof Error ? err.message : 'Patch scan failed',
+        message: err instanceof Error ? err.message : t('patchesPage.errors.patchScanFailed'),
         type: 'error',
       });
     } finally {
@@ -350,13 +368,13 @@ export default function PatchesPage() {
       });
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        throw new Error(isEditing ? 'Failed to update ring' : 'Failed to create update ring');
+        throw new Error(isEditing ? t('patchesPage.errors.updateRing') : t('patchesPage.errors.createRing'));
       }
       await fetchRings();
       setRingModalOpen(false);
       setEditingRing(null);
     } catch (err) {
-      setRingsError(err instanceof Error ? err.message : (isEditing ? 'Failed to update ring' : 'Failed to create update ring'));
+      setRingsError(err instanceof Error ? err.message : (isEditing ? t('patchesPage.errors.updateRing') : t('patchesPage.errors.createRing')));
     } finally {
       setRingSubmitting(false);
     }
@@ -368,11 +386,11 @@ export default function PatchesPage() {
       const response = await fetchWithAuth(`/update-rings/${ring.id}`, { method: 'DELETE' });
       if (!response.ok) {
         if (response.status === 401) { void navigateTo('/login', { replace: true }); return; }
-        throw new Error('Failed to delete ring');
+        throw new Error(t('patchesPage.errors.deleteRing'));
       }
       await fetchRings();
     } catch (err) {
-      setRingsError(err instanceof Error ? err.message : 'Failed to delete ring');
+      setRingsError(err instanceof Error ? err.message : t('patchesPage.errors.deleteRing'));
     }
   };
 
@@ -382,8 +400,8 @@ export default function PatchesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Patch Management</h1>
-          <p className="text-muted-foreground">Manage update rings, approvals, compliance, and patch deployments.</p>
+          <h1 className="text-xl font-semibold tracking-tight">{t('patchesPage.title')}</h1>
+          <p className="text-muted-foreground">{t('patchesPage.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           {(activeTab === 'compliance' || activeTab === 'patches') && (
@@ -394,7 +412,7 @@ export default function PatchesPage() {
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
               {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {scanLoading ? 'Scanning...' : 'Run Scan'}
+              {scanLoading ? t('patchesPage.actions.scanning') : t('patchesPage.actions.runScan')}
             </button>
           )}
           {activeTab === 'rings' && (
@@ -408,7 +426,7 @@ export default function PatchesPage() {
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               <Plus className="h-4 w-4" />
-              New Ring
+              {t('patchesPage.actions.newRing')}
             </button>
           )}
         </div>
@@ -454,7 +472,7 @@ export default function PatchesPage() {
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="mt-4 text-sm text-muted-foreground">Loading update rings...</p>
+                <p className="mt-4 text-sm text-muted-foreground">{t('patchesPage.loading.rings')}</p>
               </div>
             </div>
           ) : ringsError && rings.length === 0 ? (
@@ -465,7 +483,7 @@ export default function PatchesPage() {
                 onClick={fetchRings}
                 className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
               >
-                Try again
+                {t('patchesPage.actions.tryAgain')}
               </button>
             </div>
           ) : (
@@ -526,10 +544,11 @@ export default function PatchesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8 overflow-y-auto">
           <div className="w-full max-w-3xl rounded-lg border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">{editingRing ? 'Edit Update Ring' : 'Create Update Ring'}</h2>
+              <h2 className="text-lg font-semibold">{editingRing ? t('patchesPage.modal.editRing') : t('patchesPage.modal.createRing')}</h2>
               <button
                 type="button"
                 onClick={() => { setRingModalOpen(false); setEditingRing(null); }}
+                aria-label={t('patchesPage.actions.closeModal')}
                 className="h-8 w-8 rounded-md hover:bg-muted flex items-center justify-center"
               >
                 &times;
@@ -539,7 +558,11 @@ export default function PatchesPage() {
               key={editingRing?.id ?? 'new'}
               onSubmit={handleRingSubmit}
               onCancel={() => { setRingModalOpen(false); setEditingRing(null); }}
-              submitLabel={ringSubmitting ? (editingRing ? 'Saving...' : 'Creating...') : (editingRing ? 'Save Changes' : 'Create Ring')}
+              submitLabel={
+                ringSubmitting
+                  ? (editingRing ? t('patchesPage.actions.saving') : t('patchesPage.actions.creating'))
+                  : (editingRing ? t('patchesPage.actions.saveChanges') : t('patchesPage.actions.createRing'))
+              }
               loading={ringSubmitting}
               defaultValues={editingRing ? {
                 name: editingRing.name,

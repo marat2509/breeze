@@ -22,10 +22,72 @@ const makeJsonResponse = (payload: unknown, ok = true, status = ok ? 200 : 500):
     json: vi.fn().mockResolvedValue(payload),
   }) as unknown as Response;
 
+function makeMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear() {
+      data.clear();
+    },
+    getItem(key: string) {
+      return data.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      data.set(key, String(value));
+    },
+    removeItem(key: string) {
+      data.delete(key);
+    },
+    key(index: number) {
+      return Array.from(data.keys())[index] ?? null;
+    },
+  };
+}
+
 describe('PatchesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'localStorage', {
+      value: makeMemoryStorage(),
+      writable: true,
+      configurable: true,
+    });
+    document.cookie = 'breeze_locale=; Max-Age=0; Path=/';
     window.history.replaceState({}, '', '/?tab=patches');
+  });
+
+  it('renders the patch management shell and ring modal in Russian', async () => {
+    window.localStorage.setItem('breeze_locale', 'ru');
+    window.history.replaceState({}, '', '/?tab=rings');
+    let resolveRings!: (response: Response) => void;
+    const ringsPromise = new Promise<Response>((resolve) => {
+      resolveRings = resolve;
+    });
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/update-rings') return ringsPromise;
+      if (url === '/patches') return makeJsonResponse({ data: [] });
+      return makeJsonResponse({}, false, 404);
+    });
+
+    render(<PatchesPage />);
+
+    expect(await screen.findByText('Управление патчами')).toBeInTheDocument();
+    expect(screen.getByText('Управляйте кольцами обновлений, одобрениями, соответствием и развертываниями патчей.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Соответствие' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Патчи' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Кольца обновлений' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Новое кольцо' })).toBeInTheDocument();
+    expect(screen.getByText('Загрузка колец обновлений...')).toBeInTheDocument();
+    resolveRings(makeJsonResponse({ data: [] }));
+    expect(await screen.findByText('Кольца обновлений не найдены.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Новое кольцо' }));
+
+    expect(screen.getByText('Создать кольцо обновлений')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать кольцо' })).toBeInTheDocument();
   });
 
   it('keeps failed bulk approvals pending when the API only approves some patches', async () => {
