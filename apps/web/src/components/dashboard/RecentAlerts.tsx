@@ -3,7 +3,8 @@ import { AlertTriangle, AlertCircle, Info, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getErrorMessage, getErrorTitle } from '@/lib/errorMessages';
 import { fetchWithAuth } from '../../stores/auth';
-import { formatTimeAgo } from '@/lib/formatTime';
+import { formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 interface Alert {
   id: string;
@@ -47,6 +48,7 @@ const severityConfig = {
 };
 
 export default function RecentAlerts() {
+  const { locale, t } = useI18n();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -92,9 +94,9 @@ export default function RecentAlerts() {
     return (
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">Recent Alerts</h3>
+          <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">{t('dashboard.recentAlerts.title')}</h3>
           <a href="/alerts" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-            View all
+            {t('dashboard.viewAll')}
           </a>
         </div>
         <div className="space-y-3">
@@ -116,19 +118,19 @@ export default function RecentAlerts() {
     return (
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">Recent Alerts</h3>
+          <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">{t('dashboard.recentAlerts.title')}</h3>
           <a href="/alerts" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-            View all
+            {t('dashboard.viewAll')}
           </a>
         </div>
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="rounded-full bg-destructive/10 p-3 mb-3">
             <AlertCircle className="h-5 w-5 text-destructive" />
           </div>
-          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error)}</p>
-          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error)}</p>
+          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error, locale)}</p>
+          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error, locale)}</p>
           <button onClick={retry} className="text-xs font-medium text-primary hover:underline">
-            Try again
+            {t('dashboard.tryAgain')}
           </button>
         </div>
       </div>
@@ -138,24 +140,24 @@ export default function RecentAlerts() {
   return (
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">Recent Alerts</h3>
+        <h3 data-testid="dashboard-recent-alerts-heading" className="text-sm font-semibold">{t('dashboard.recentAlerts.title')}</h3>
         <a href="/alerts" className="text-sm text-primary hover:underline">
-          View all
+          {t('dashboard.viewAll')}
         </a>
       </div>
       <div className="space-y-3">
         {alerts.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-center">
-            <p className="text-sm font-medium text-foreground/70">All clear</p>
-            <p className="text-xs text-muted-foreground">No active alerts across your fleet</p>
+            <p className="text-sm font-medium text-foreground/70">{t('dashboard.recentAlerts.allClear')}</p>
+            <p className="text-xs text-muted-foreground">{t('dashboard.recentAlerts.empty')}</p>
           </div>
         ) : (
           alerts.map((alert) => {
             const severityKey = alert.severity.toLowerCase() as keyof typeof severityConfig;
             const config = severityConfig[severityKey] || severityConfig.low;
             const Icon = config.icon;
-            const deviceName = alert.device?.name || alert.deviceName || 'Unknown';
-            const alertTitle = alert.title || alert.message || 'Alert';
+            const deviceName = alert.device?.name || alert.deviceName || t('dashboard.unknownDevice');
+            const alertTitle = alert.title || alert.message || t('dashboard.recentAlerts.alertFallback');
 
             return (
               <div
@@ -172,7 +174,7 @@ export default function RecentAlerts() {
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{deviceName}</span>
                     <span>-</span>
-                    <span>{formatTimeAgo(alert.createdAt)}</span>
+                    <span>{formatRelativeTime(alert.createdAt, locale)}</span>
                   </div>
                 </div>
               </div>

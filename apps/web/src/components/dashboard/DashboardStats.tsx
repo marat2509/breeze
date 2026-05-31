@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 import { getErrorMessage, getErrorTitle } from '@/lib/errorMessages';
 import { fetchWithAuth, useAuthStore } from '../../stores/auth';
 import { useAiStore } from '@/stores/aiStore';
+import { formatNumber, formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 interface DashboardStatsData {
   totalDevices: number;
@@ -13,16 +15,17 @@ interface DashboardStatsData {
   onlinePercentage: number;
 }
 
-function getGreeting(): string {
+function getGreeting(t: ReturnType<typeof useI18n>['t']): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return t('dashboard.greeting.morning');
+  if (hour < 17) return t('dashboard.greeting.afternoon');
+  return t('dashboard.greeting.evening');
 }
 
 export default function DashboardStats() {
+  const { locale, t } = useI18n();
   const { user } = useAuthStore();
-  const [greeting, setGreeting] = useState('Welcome');
+  const [greeting, setGreeting] = useState(() => t('dashboard.greeting.welcome'));
   const [stats, setStats] = useState<DashboardStatsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -30,7 +33,7 @@ export default function DashboardStats() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [updatedText, setUpdatedText] = useState('');
 
-  useEffect(() => { setGreeting(getGreeting()); }, []);
+  useEffect(() => { setGreeting(getGreeting(t)); }, [t]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -88,48 +91,53 @@ export default function DashboardStats() {
     const tick = () => {
       const diffMs = Date.now() - lastUpdated.getTime();
       const diffSecs = Math.floor(diffMs / 1000);
-      const diffMins = Math.floor(diffMs / 60000);
-      if (diffSecs < 10) setUpdatedText('Just now');
-      else if (diffMins < 1) setUpdatedText(`${diffSecs}s ago`);
-      else if (diffMins < 60) setUpdatedText(`${diffMins}m ago`);
-      else setUpdatedText(`${Math.floor(diffMs / 3600000)}h ago`);
+      if (diffSecs < 10) setUpdatedText(t('dashboard.justNow'));
+      else setUpdatedText(formatRelativeTime(lastUpdated, locale));
     };
     tick();
     const interval = setInterval(tick, 10_000);
     return () => clearInterval(interval);
-  }, [lastUpdated]);
+  }, [lastUpdated, locale, t]);
 
   const refresh = () => setRetryCount(c => c + 1);
   const firstName = user?.name?.split(' ')[0];
 
   const statItems = stats ? [
     {
-      name: 'Total Devices',
-      value: stats.totalDevices.toLocaleString(),
+      name: t('dashboard.stats.totalDevices'),
+      testId: 'total-devices',
+      kind: 'total',
+      value: formatNumber(stats.totalDevices, locale),
       icon: Monitor,
       href: '/devices',
       change: '',
       changeType: 'neutral' as const
     },
     {
-      name: 'Online',
-      value: stats.onlineDevices.toLocaleString(),
+      name: t('dashboard.stats.online'),
+      testId: 'online',
+      kind: 'online',
+      value: formatNumber(stats.onlineDevices, locale),
       icon: CheckCircle,
       href: '/devices?status=online',
-      change: `${stats.onlinePercentage}%`,
+      change: t('dashboard.percent', { value: formatNumber(stats.onlinePercentage, locale) }),
       changeType: 'positive' as const
     },
     {
-      name: 'Warnings',
-      value: stats.warningAlerts.toLocaleString(),
+      name: t('dashboard.stats.warnings'),
+      testId: 'warnings',
+      kind: 'warnings',
+      value: formatNumber(stats.warningAlerts, locale),
       icon: AlertTriangle,
       href: '/alerts?severity=warning&status=active',
       change: '',
       changeType: 'neutral' as const
     },
     {
-      name: 'Critical',
-      value: stats.criticalAlerts.toLocaleString(),
+      name: t('dashboard.stats.critical'),
+      testId: 'critical',
+      kind: 'critical',
+      value: formatNumber(stats.criticalAlerts, locale),
       icon: XCircle,
       href: '/alerts?severity=critical&status=active',
       change: '',
@@ -147,8 +155,8 @@ export default function DashboardStats() {
         <button
           onClick={refresh}
           className="rounded-md p-1 hover:bg-muted transition-colors"
-          title="Refresh dashboard"
-          aria-label="Refresh dashboard"
+          aria-label={t('dashboard.refresh')}
+          title={t('dashboard.refresh')}
         >
           <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
         </button>
@@ -189,10 +197,10 @@ export default function DashboardStats() {
             <div className="rounded-full bg-destructive/10 p-3 mb-3">
               <AlertCircle className="h-5 w-5 text-destructive" />
             </div>
-            <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error)}</p>
-            <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error)}</p>
+            <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error, locale)}</p>
+            <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error, locale)}</p>
             <button onClick={refresh} className="text-xs font-medium text-primary hover:underline">
-              Try again
+              {t('dashboard.tryAgain')}
             </button>
           </div>
         </div>
@@ -209,11 +217,11 @@ export default function DashboardStats() {
             <Monitor className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">No devices enrolled yet</p>
-            <p className="text-xs text-muted-foreground">Enroll your first device to start monitoring your fleet.</p>
+            <p className="text-sm font-medium text-foreground">{t('dashboard.noDevicesTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('dashboard.noDevicesDescription')}</p>
           </div>
           <a href="/devices#add-device" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-            Add Device
+            {t('dashboard.addDevice')}
             <ArrowRight className="h-3.5 w-3.5" />
           </a>
         </div>
@@ -229,7 +237,7 @@ export default function DashboardStats() {
           <a
             key={stat.name}
             href={stat.href}
-            data-testid={`dashboard-${stat.name.toLowerCase().replace(/\s+/g, '-')}-card`}
+            data-testid={`dashboard-${stat.testId}-card`}
             className={cn(
               'flex items-center gap-3 px-6 py-4 transition-colors hover:bg-muted/30',
               idx % 2 !== 0 && 'border-l border-border',
@@ -240,10 +248,10 @@ export default function DashboardStats() {
             <stat.icon
               className={cn(
                 'h-5 w-5',
-                stat.name === 'Online' && 'text-success',
-                stat.name === 'Warnings' && (stats!.warningAlerts > 0 ? 'text-warning' : 'text-muted-foreground'),
-                stat.name === 'Critical' && (stats!.criticalAlerts > 0 ? 'text-destructive' : 'text-muted-foreground'),
-                !['Online', 'Warnings', 'Critical'].includes(stat.name) && 'text-muted-foreground'
+                stat.kind === 'online' && 'text-success',
+                stat.kind === 'warnings' && (stats!.warningAlerts > 0 ? 'text-warning' : 'text-muted-foreground'),
+                stat.kind === 'critical' && (stats!.criticalAlerts > 0 ? 'text-destructive' : 'text-muted-foreground'),
+                stat.kind === 'total' && 'text-muted-foreground'
               )}
             />
             <div>

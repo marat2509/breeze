@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { FileCode, User, Settings, Monitor, AlertCircle, Activity } from 'lucide-react';
 import { getErrorMessage, getErrorTitle } from '@/lib/errorMessages';
 import { fetchWithAuth } from '../../stores/auth';
-import { formatTimeAgo } from '@/lib/formatTime';
 import { formatAuditAction } from '@/lib/auditFormat';
+import { formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 interface AuditLogEntry {
   id: string;
@@ -44,6 +45,7 @@ const typeIcons: Record<string, typeof Monitor> = {
 };
 
 export default function RecentActivity() {
+  const { locale, t } = useI18n();
   const [activities, setActivities] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -89,9 +91,9 @@ export default function RecentActivity() {
     return (
       <div className="border-t pt-6 mt-2">
         <div className="mb-4 flex items-center justify-between">
-          <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">Recent Activity</h3>
+          <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">{t('dashboard.recentActivity.title')}</h3>
           <a href="/audit" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-            View audit log
+            {t('dashboard.recentActivity.viewAuditLog')}
           </a>
         </div>
         <div className="space-y-0">
@@ -112,19 +114,19 @@ export default function RecentActivity() {
     return (
       <div className="border-t pt-6 mt-2">
         <div className="mb-4 flex items-center justify-between">
-          <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">Recent Activity</h3>
+          <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">{t('dashboard.recentActivity.title')}</h3>
           <a href="/audit" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-            View audit log
+            {t('dashboard.recentActivity.viewAuditLog')}
           </a>
         </div>
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="rounded-full bg-destructive/10 p-3 mb-3">
             <AlertCircle className="h-5 w-5 text-destructive" />
           </div>
-          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error)}</p>
-          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error)}</p>
+          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error, locale)}</p>
+          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error, locale)}</p>
           <button onClick={retry} className="text-xs font-medium text-primary hover:underline">
-            Try again
+            {t('dashboard.tryAgain')}
           </button>
         </div>
       </div>
@@ -134,9 +136,9 @@ export default function RecentActivity() {
   return (
     <div className="border-t pt-6 mt-2">
       <div className="mb-4 flex items-center justify-between">
-        <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">Recent Activity</h3>
+        <h3 data-testid="dashboard-recent-activity-heading" className="text-sm font-semibold">{t('dashboard.recentActivity.title')}</h3>
         <a href="/audit" className="text-sm text-primary hover:underline">
-          View audit log
+          {t('dashboard.recentActivity.viewAuditLog')}
         </a>
       </div>
       <div className="overflow-x-auto">
@@ -145,17 +147,17 @@ export default function RecentActivity() {
             <div className="rounded-full bg-muted p-3 mb-3">
               <Activity className="h-5 w-5 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">No activity yet</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Actions like device enrollment, script runs, and config changes will appear here.</p>
+            <p className="text-sm text-muted-foreground">{t('dashboard.recentActivity.emptyTitle')}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">{t('dashboard.recentActivity.emptyDescription')}</p>
           </div>
         ) : (
           <table className="w-full">
             <thead>
               <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="pb-3">User</th>
-                <th className="pb-3">Action</th>
-                <th className="pb-3">Target</th>
-                <th className="pb-3">Time</th>
+                <th className="pb-3">{t('dashboard.recentActivity.user')}</th>
+                <th className="pb-3">{t('dashboard.recentActivity.action')}</th>
+                <th className="pb-3">{t('dashboard.recentActivity.target')}</th>
+                <th className="pb-3">{t('dashboard.recentActivity.time')}</th>
               </tr>
             </thead>
             <tbody>
@@ -163,7 +165,7 @@ export default function RecentActivity() {
                 const resourceType = activity.resource?.type || activity.resourceType || activity.targetType;
                 const targetType = (resourceType || 'default').toLowerCase();
                 const Icon = typeIcons[targetType] || typeIcons.default;
-                const userName = activity.user?.name || activity.userName || 'System';
+                const userName = activity.user?.name || activity.userName || t('dashboard.recentActivity.system');
                 const targetName = activity.resource?.name || activity.target || activity.targetName;
                 const target = targetName && targetName.trim()
                   ? targetName
@@ -183,7 +185,7 @@ export default function RecentActivity() {
                       </div>
                     </td>
                     <td className="py-3 text-sm text-muted-foreground">
-                      {timestamp ? formatTimeAgo(timestamp) : '-'}
+                      {timestamp ? formatRelativeTime(timestamp, locale) : '-'}
                     </td>
                   </tr>
                 );

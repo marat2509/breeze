@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, WifiOff } from 'lucide-react';
 import { getErrorMessage, getErrorTitle } from '@/lib/errorMessages';
 import { fetchWithAuth } from '../../stores/auth';
-import { formatTimeAgo } from '@/lib/formatTime';
 import { cn } from '@/lib/utils';
+import { formatNumber, formatRelativeTime } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 interface Device {
   id: string;
@@ -15,6 +16,7 @@ interface Device {
 }
 
 export default function DeviceStatusChart() {
+  const { locale, t } = useI18n();
   const [offlineDevices, setOfflineDevices] = useState<Device[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [onlineCount, setOnlineCount] = useState(0);
@@ -88,15 +90,15 @@ export default function DeviceStatusChart() {
   if (error && totalCount === 0) {
     return (
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <a href="/devices" className="mb-4 inline-block text-sm font-semibold hover:text-primary transition-colors">Fleet Status</a>
+        <a href="/devices" className="mb-4 inline-block text-sm font-semibold hover:text-primary transition-colors">{t('dashboard.fleetStatus.title')}</a>
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="rounded-full bg-destructive/10 p-3 mb-3">
             <AlertCircle className="h-5 w-5 text-destructive" />
           </div>
-          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error)}</p>
-          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error)}</p>
+          <p className="text-sm font-medium text-foreground mb-1">{getErrorTitle(error, locale)}</p>
+          <p className="text-xs text-muted-foreground mb-3">{getErrorMessage(error, locale)}</p>
           <button onClick={retry} className="text-xs font-medium text-primary hover:underline">
-            Try again
+            {t('dashboard.tryAgain')}
           </button>
         </div>
       </div>
@@ -106,11 +108,11 @@ export default function DeviceStatusChart() {
   if (totalCount === 0) {
     return (
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <a href="/devices" className="mb-4 inline-block text-sm font-semibold hover:text-primary transition-colors">Fleet Status</a>
+        <a href="/devices" className="mb-4 inline-block text-sm font-semibold hover:text-primary transition-colors">{t('dashboard.fleetStatus.title')}</a>
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          <p className="text-sm text-muted-foreground">No devices enrolled yet</p>
+          <p className="text-sm text-muted-foreground">{t('dashboard.noDevicesTitle')}</p>
           <a href="/devices#add-device" className="mt-2 text-xs font-medium text-primary hover:underline">
-            Add a device
+            {t('dashboard.addADevice')}
           </a>
         </div>
       </div>
@@ -123,12 +125,15 @@ export default function DeviceStatusChart() {
   return (
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <a href="/devices" className="text-sm font-semibold hover:text-primary transition-colors">Fleet Status</a>
+        <a href="/devices" className="text-sm font-semibold hover:text-primary transition-colors">{t('dashboard.fleetStatus.title')}</a>
         <span className={cn(
           'text-xs font-medium',
           allOnline ? 'text-success' : 'text-muted-foreground'
         )}>
-          {onlineCount}/{totalCount} online
+          {t('dashboard.fleetStatus.onlineCount', {
+            online: formatNumber(onlineCount, locale),
+            total: formatNumber(totalCount, locale),
+          })}
         </span>
       </div>
 
@@ -137,8 +142,8 @@ export default function DeviceStatusChart() {
           <div className="rounded-full bg-success/10 p-3 mb-3">
             <CheckCircle2 className="h-5 w-5 text-success" />
           </div>
-          <p className="text-sm font-medium text-foreground">All devices online</p>
-          <p className="text-xs text-muted-foreground mt-1">Your fleet is healthy</p>
+          <p className="text-sm font-medium text-foreground">{t('dashboard.fleetStatus.allOnline')}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('dashboard.fleetStatus.healthy')}</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -151,10 +156,10 @@ export default function DeviceStatusChart() {
                 className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/50 transition-colors"
               >
                 <WifiOff className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                <span className="truncate flex-1 font-medium">{device.name || device.hostname || 'Unknown'}</span>
+                <span className="truncate flex-1 font-medium">{device.name || device.hostname || t('dashboard.unknownDevice')}</span>
                 {lastTime && (
                   <span className="text-xs text-muted-foreground flex-shrink-0">
-                    {formatTimeAgo(lastTime)}
+                    {formatRelativeTime(lastTime, locale)}
                   </span>
                 )}
               </a>
@@ -165,7 +170,7 @@ export default function DeviceStatusChart() {
               href="/devices?status=offline"
               className="block text-center text-xs font-medium text-primary hover:underline pt-2"
             >
-              View all {offlineTotal} offline
+              {t('dashboard.fleetStatus.viewAllOffline', { count: formatNumber(offlineTotal, locale) })}
             </a>
           )}
         </div>
