@@ -132,6 +132,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/ScriptPickerModal.tsx',
   'src/components/dashboard/DashboardStats.tsx',
   'src/components/dashboard/DeviceStatusChart.tsx',
+  'src/components/dashboard/DashboardCustomizer.tsx',
   'src/components/dashboard/RecentActivity.tsx',
   'src/components/dashboard/RecentAlerts.tsx',
   'src/components/scripts/ExecutionDetails.tsx',
