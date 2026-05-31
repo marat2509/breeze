@@ -198,6 +198,8 @@ const HARD_CODED_SCAN_FILES = [
   'src/pages/register-partner.astro',
   'src/pages/settings/partner.astro',
   'src/pages/settings/profile.astro',
+  'src/pages/settings/connected-apps.astro',
+  'src/pages/settings/index.astro',
   'src/pages/setup.astro',
 ];
 

@@ -386,6 +386,21 @@ export const resources = {
         },
       },
     },
+    settings: {
+      index: {
+        title: 'Settings',
+        description: 'Manage your organization settings, users, and sites.',
+        organizations: 'Organizations',
+        organizationsDescription: 'Manage organizations, contracts, and account settings.',
+        users: 'Users',
+        usersDescription: 'Invite users, manage roles, and control access permissions.',
+        sites: 'Sites',
+        sitesDescription: 'Configure locations, timezones, and site-specific settings.',
+      },
+      connectedApps: {
+        description: "AI assistants and other MCP clients that have been authorized to access your tenant via OAuth. Revoke access at any time - the app's token will be rejected within 10 minutes.",
+      },
+    },
     devices: {
       status: {
         online: 'Online',
@@ -3878,6 +3893,21 @@ export const resources = {
           cancel: 'Не удалось отменить запрос. Повторите попытку.',
           network: 'Ошибка сети. Повторите попытку.',
         },
+      },
+    },
+    settings: {
+      index: {
+        title: 'Настройки',
+        description: 'Управляйте настройками организации, пользователями и сайтами.',
+        organizations: 'Организации',
+        organizationsDescription: 'Управляйте организациями, контрактами и настройками аккаунта.',
+        users: 'Пользователи',
+        usersDescription: 'Приглашайте пользователей, управляйте ролями и правами доступа.',
+        sites: 'Сайты',
+        sitesDescription: 'Настраивайте локации, часовые пояса и параметры конкретных сайтов.',
+      },
+      connectedApps: {
+        description: 'AI-ассистенты и другие MCP-клиенты, которым разрешён доступ к tenant через OAuth. Доступ можно отозвать в любой момент - токен приложения будет отклоняться в течение 10 минут.',
       },
     },
     devices: {
