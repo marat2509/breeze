@@ -8,16 +8,58 @@ import ChangeSiteModal from './ChangeSiteModal';
 import ScriptPickerModal, { type Script, type ScriptRunAsSelection } from './ScriptPickerModal';
 import type { Device, DeviceStatus, OSType } from './DeviceList';
 import { fetchWithAuth } from '../../stores/auth';
-import { sendDeviceCommand, executeScript, toggleMaintenanceMode, decommissionDevice, clearDeviceSessions, restoreDevice, permanentDeleteDevice, sendWakeCommand, watchWakeOutcome, WakeCommandError, wakeFriendlyErrorMessage } from '../../services/deviceActions';
+import { sendDeviceCommand, executeScript, toggleMaintenanceMode, decommissionDevice, clearDeviceSessions, restoreDevice, permanentDeleteDevice, sendWakeCommand, watchWakeOutcome, WakeCommandError } from '../../services/deviceActions';
 import { useAiStore } from '@/stores/aiStore';
 import { navigateTo } from '@/lib/navigation';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 import Breadcrumbs from '../layout/Breadcrumbs';
 
 type DeviceDetailPageProps = {
   deviceId: string;
 };
 
+type Translate = (key: string, params?: TranslationParams) => string;
+
+function commandActionLabel(action: string, t: Translate): string {
+  switch (action) {
+    case 'reboot_safe_mode':
+      return t('deviceDetailPage.actions.rebootSafeMode');
+    case 'reboot':
+      return t('deviceDetailPage.actions.reboot');
+    case 'shutdown':
+      return t('deviceDetailPage.actions.shutdown');
+    case 'lock':
+      return t('deviceDetailPage.actions.lock');
+    default:
+      return action;
+  }
+}
+
+function wakeErrorMessage(code: string | undefined, t: Translate): string {
+  switch (code) {
+    case 'NO_MACS':
+      return t('deviceDetailPage.wakeErrors.noMacs');
+    case 'NO_SUBNET':
+      return t('deviceDetailPage.wakeErrors.noSubnet');
+    case 'IPV6_ONLY':
+      return t('deviceDetailPage.wakeErrors.ipv6Only');
+    case 'NO_RELAY':
+      return t('deviceDetailPage.wakeErrors.noRelay');
+    case 'RELAY_OVERRIDE_INVALID':
+      return t('deviceDetailPage.wakeErrors.relayOverrideInvalid');
+    case 'WS_SEND_FAILED':
+      return t('deviceDetailPage.wakeErrors.wsSendFailed');
+    case 'TARGET_NOT_FOUND':
+      return t('deviceDetailPage.errors.notFound');
+    default:
+      return t('deviceDetailPage.wakeErrors.generic');
+  }
+}
+
 export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
+  const { t } = useI18n();
+  const tRef = useRef(t);
   const [device, setDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -25,6 +67,10 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [changeSiteOpen, setChangeSiteOpen] = useState(false);
   const [scriptPickerOpen, setScriptPickerOpen] = useState(false);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   // Track every in-flight wake watcher so that navigating away aborts the
   // long-running poll loop. Without this, watchWakeOutcome keeps polling
@@ -50,9 +96,9 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
       const response = await fetchWithAuth(`/devices/${deviceId}`);
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Device not found');
+          throw new Error(tRef.current('deviceDetailPage.errors.notFound'));
         }
-        throw new Error('Failed to fetch device');
+        throw new Error(tRef.current('deviceDetailPage.errors.fetch'));
       }
 
       const data = await response.json();
@@ -63,7 +109,7 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
       // Transform API response to match Device type
       const transformedDevice: Device = {
         id: data.id,
-        hostname: data.hostname ?? data.displayName ?? 'Unknown',
+        hostname: data.hostname ?? data.displayName ?? tRef.current('deviceDetailPage.placeholders.unknownDevice'),
         os: (data.osType ?? data.os ?? 'windows') as OSType,
         osVersion: data.osVersion ?? '',
         status: (data.status ?? 'offline') as DeviceStatus,
@@ -71,9 +117,9 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
         ramPercent: latestMetrics?.ramPercent ?? 0,
         lastSeen: data.lastSeenAt ?? data.lastSeen ?? '',
         orgId: data.orgId ?? '',
-        orgName: data.orgName ?? 'Unknown Org',
+        orgName: data.orgName ?? tRef.current('deviceDetailPage.placeholders.unknownOrg'),
         siteId: data.siteId ?? '',
-        siteName: data.siteName ?? 'Unknown Site',
+        siteName: data.siteName ?? tRef.current('deviceDetailPage.placeholders.unknownSite'),
         agentVersion: data.agentVersion ?? '',
         tags: data.tags ?? [],
         lastUser: data.lastUser ?? undefined,
@@ -87,7 +133,10 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
 
       setDevice(transformedDevice);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch device');
+      const notFoundMessage = tRef.current('deviceDetailPage.errors.notFound');
+      setError(err instanceof Error && err.message === notFoundMessage
+        ? notFoundMessage
+        : tRef.current('deviceDetailPage.errors.fetch'));
     } finally {
       setLoading(false);
     }
@@ -161,8 +210,13 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
         case 'shutdown':
         case 'lock': {
           await sendDeviceCommand(device.id, action);
-          const label = action === 'reboot_safe_mode' ? 'Reboot to Safe Mode' : action.charAt(0).toUpperCase() + action.slice(1);
-          showToast({ type: 'success', message: `${label} command sent to ${device.hostname}` });
+          showToast({
+            type: 'success',
+            message: tRef.current('deviceDetailPage.toasts.commandSent', {
+              action: commandActionLabel(action, tRef.current),
+              hostname: device.hostname,
+            }),
+          });
           break;
         }
 
@@ -172,19 +226,26 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
             const hostname = device.hostname;
             showToast({
               type: 'success',
-              message: `Wake packet sent to ${hostname} via ${wake.relay.hostname} (${wake.broadcast}). Watching for it to come online…`,
+              message: tRef.current('deviceDetailPage.toasts.wakeSent', {
+                hostname,
+                relay: wake.relay.hostname,
+                broadcast: wake.broadcast,
+              }),
             });
             const wakeController = new AbortController();
             wakeWatchersRef.current.add(wakeController);
             void watchWakeOutcome(device.id, { signal: wakeController.signal })
               .then(async (outcome) => {
                 if (outcome === 'online') {
-                  showToast({ type: 'success', message: `${hostname} is now online.` });
+                  showToast({
+                    type: 'success',
+                    message: tRef.current('deviceDetailPage.toasts.wakeOnline', { hostname }),
+                  });
                   await fetchDevice();
                 } else if (outcome === 'timeout') {
                   showToast({
                     type: 'error',
-                    message: `${hostname} did not come online within 4 minutes. Check ethernet + BIOS WoL.`,
+                    message: tRef.current('deviceDetailPage.toasts.wakeTimeout', { hostname }),
                   });
                 }
                 // 'aborted' is silent — user navigated away or page reloaded.
@@ -194,8 +255,13 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
               });
           } catch (err) {
             if (err instanceof WakeCommandError) {
-              const friendly = wakeFriendlyErrorMessage(err.code) ?? err.message;
-              showToast({ type: 'error', message: `${device.hostname}: ${friendly}` });
+              showToast({
+                type: 'error',
+                message: tRef.current('deviceDetailPage.toasts.deviceError', {
+                  hostname: device.hostname,
+                  message: wakeErrorMessage(err.code, tRef.current),
+                }),
+              });
             } else {
               throw err;
             }
@@ -207,7 +273,7 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
           await sendDeviceCommand(device.id, 'refresh_inventory');
           showToast({
             type: 'success',
-            message: `Inventory refresh requested for ${device.hostname}. Fresh data in 1–2 minutes.`,
+            message: tRef.current('deviceDetailPage.toasts.inventoryRefresh', { hostname: device.hostname }),
           });
           break;
         }
@@ -215,7 +281,15 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
         case 'maintenance': {
           const isCurrentlyMaintenance = device.status === 'maintenance';
           await toggleMaintenanceMode(device.id, !isCurrentlyMaintenance);
-          showToast({ type: 'success', message: `${device.hostname} ${isCurrentlyMaintenance ? 'taken out of' : 'put into'} maintenance mode` });
+          showToast({
+            type: 'success',
+            message: tRef.current(
+              isCurrentlyMaintenance
+                ? 'deviceDetailPage.toasts.maintenanceDisabled'
+                : 'deviceDetailPage.toasts.maintenanceEnabled',
+              { hostname: device.hostname },
+            ),
+          });
           await fetchDevice();
           break;
         }
@@ -246,7 +320,13 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
 
         case 'clear-sessions': {
           const result = await clearDeviceSessions(device.id);
-          showToast({ type: 'success', message: `Cleared ${result.cleaned} session${result.cleaned !== 1 ? 's' : ''} for ${device.hostname}` });
+          showToast({
+            type: 'success',
+            message: tRef.current('deviceDetailPage.toasts.sessionsCleared', {
+              count: String(result.cleaned),
+              hostname: device.hostname,
+            }),
+          });
           break;
         }
 
@@ -255,21 +335,31 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
           let cancelled = false;
           showToast({
             type: 'undo',
-            message: `Decommissioning "${device.hostname}"...`,
+            message: tRef.current('deviceDetailPage.toasts.decommissioning', { hostname: device.hostname }),
             duration: 5000,
             onUndo: () => {
               cancelled = true;
-              showToast({ type: 'success', message: 'Decommission cancelled', duration: 2000 });
+              showToast({
+                type: 'success',
+                message: tRef.current('deviceDetailPage.toasts.decommissionCancelled'),
+                duration: 2000,
+              });
             }
           });
           setTimeout(async () => {
             if (cancelled) return;
             try {
               await decommissionDevice(device.id);
-              showToast({ type: 'success', message: `${device.hostname} has been decommissioned` });
+              showToast({
+                type: 'success',
+                message: tRef.current('deviceDetailPage.toasts.decommissioned', { hostname: device.hostname }),
+              });
               void navigateTo('/devices');
-            } catch (err) {
-              showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to decommission ${device.hostname}` });
+            } catch {
+              showToast({
+                type: 'error',
+                message: tRef.current('deviceDetailPage.toasts.decommissionFailed', { hostname: device.hostname }),
+              });
             }
           }, 5000);
           return;
@@ -277,7 +367,10 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
 
         case 'restore':
           await restoreDevice(device.id);
-          showToast({ type: 'success', message: `${device.hostname} has been restored` });
+          showToast({
+            type: 'success',
+            message: tRef.current('deviceDetailPage.toasts.restored', { hostname: device.hostname }),
+          });
           await fetchDevice();
           break;
 
@@ -286,31 +379,50 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
           let pdCancelled = false;
           showToast({
             type: 'undo',
-            message: `Permanently deleting "${device.hostname}"...`,
+            message: tRef.current('deviceDetailPage.toasts.permanentDeleting', { hostname: device.hostname }),
             duration: 5000,
             onUndo: () => {
               pdCancelled = true;
-              showToast({ type: 'success', message: 'Permanent delete cancelled', duration: 2000 });
+              showToast({
+                type: 'success',
+                message: tRef.current('deviceDetailPage.toasts.permanentDeleteCancelled'),
+                duration: 2000,
+              });
             }
           });
           setTimeout(async () => {
             if (pdCancelled) return;
             try {
               await permanentDeleteDevice(device.id);
-              showToast({ type: 'success', message: `${device.hostname} has been permanently deleted` });
+              showToast({
+                type: 'success',
+                message: tRef.current('deviceDetailPage.toasts.permanentDeleted', { hostname: device.hostname }),
+              });
               void navigateTo('/devices');
-            } catch (err) {
-              showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to delete ${device.hostname}` });
+            } catch {
+              showToast({
+                type: 'error',
+                message: tRef.current('deviceDetailPage.toasts.deleteFailed', { hostname: device.hostname }),
+              });
             }
           }, 5000);
           return;
         }
 
         default:
-          showToast({ type: 'error', message: `Unknown action: ${action}` });
+          showToast({
+            type: 'error',
+            message: tRef.current('deviceDetailPage.toasts.unknownAction', { action }),
+          });
       }
-    } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : `Failed to ${action} ${device.hostname}` });
+    } catch {
+      showToast({
+        type: 'error',
+        message: tRef.current('deviceDetailPage.toasts.actionFailed', {
+          action,
+          hostname: device.hostname,
+        }),
+      });
     } finally {
       setActionInProgress(false);
     }
@@ -322,9 +434,15 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
     try {
       setActionInProgress(true);
       await executeScript(script.id, [device.id], parameters, runAs);
-      showToast({ type: 'success', message: `Script "${script.name}" queued for ${device.hostname}` });
-    } catch (err) {
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to queue script' });
+      showToast({
+        type: 'success',
+        message: tRef.current('deviceDetailPage.toasts.scriptQueued', {
+          script: script.name,
+          hostname: device.hostname,
+        }),
+      });
+    } catch {
+      showToast({ type: 'error', message: tRef.current('deviceDetailPage.toasts.scriptQueueFailed') });
     } finally {
       setActionInProgress(false);
     }
@@ -335,7 +453,7 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading device...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('deviceDetailPage.loading')}</p>
         </div>
       </div>
     );
@@ -350,16 +468,16 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to devices
+          {t('deviceDetailPage.backToDevices')}
         </button>
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-center">
-          <p className="text-sm text-destructive">{error || 'Device not found'}</p>
+          <p className="text-sm text-destructive">{error || t('deviceDetailPage.errors.notFound')}</p>
           <button
             type="button"
             onClick={handleBack}
             className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Go back
+            {t('deviceDetailPage.goBack')}
           </button>
         </div>
       </div>
@@ -369,8 +487,8 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
   return (
     <div className="space-y-6">
       <Breadcrumbs items={[
-        { label: 'Devices', href: '/devices' },
-        { label: device.hostname || 'Device' }
+        { label: t('deviceDetailPage.breadcrumbs.devices'), href: '/devices' },
+        { label: device.hostname || t('deviceDetailPage.breadcrumbs.device') }
       ]} />
       <DeviceDetails device={device} onBack={handleBack} onAction={handleAction} />
       <DeviceSettingsModal
@@ -385,7 +503,10 @@ export default function DeviceDetailPage({ deviceId }: DeviceDetailPageProps) {
         isOpen={changeSiteOpen}
         onClose={() => setChangeSiteOpen(false)}
         onSaved={() => {
-          showToast({ type: 'success', message: `${device.hostname} moved to new site` });
+          showToast({
+            type: 'success',
+            message: tRef.current('deviceDetailPage.toasts.movedSite', { hostname: device.hostname }),
+          });
           void fetchDevice();
         }}
       />
