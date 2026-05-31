@@ -4,12 +4,14 @@ import { useScriptAiStore } from '@/stores/scriptAiStore';
 import ScriptAiMessages from './ScriptAiMessages';
 import ScriptAiInput from './ScriptAiInput';
 import type { ScriptFormBridge } from '@/stores/scriptAiStore';
+import { useI18n } from '@/i18n/react';
 
 interface ScriptAiPanelProps {
   bridge: ScriptFormBridge;
 }
 
 export default function ScriptAiPanel({ bridge }: ScriptAiPanelProps) {
+  const { t } = useI18n();
   const {
     closePanel,
     sessionId,
@@ -57,17 +59,17 @@ export default function ScriptAiPanel({ bridge }: ScriptAiPanelProps) {
     <div className="flex h-[600px] w-96 shrink-0 flex-col overflow-hidden border-l bg-background">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-sm font-medium">AI Script Assistant</span>
+        <span className="text-sm font-medium">{t('scripts.ai.panelTitle')}</span>
         <div className="flex items-center gap-1">
           {hasReverted && (
             <button
               type="button"
               onClick={redo}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
-              title="Re-apply AI change"
+              title={t('scripts.ai.redoTitle')}
             >
               <Redo2 className="h-3 w-3" />
-              Redo
+              {t('scripts.ai.redo')}
             </button>
           )}
           {hasApplied && (
@@ -75,16 +77,17 @@ export default function ScriptAiPanel({ bridge }: ScriptAiPanelProps) {
               type="button"
               onClick={revert}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
-              title="Revert last AI change"
+              title={t('scripts.ai.revertTitle')}
             >
               <Undo2 className="h-3 w-3" />
-              Revert
+              {t('scripts.ai.revert')}
             </button>
           )}
           <button
             type="button"
             onClick={closePanel}
             className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted"
+            title={t('scripts.ai.closePanel')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -97,7 +100,7 @@ export default function ScriptAiPanel({ bridge }: ScriptAiPanelProps) {
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs text-destructive">{error}</p>
             <button onClick={clearError} className="text-xs text-destructive hover:underline">
-              Dismiss
+              {t('common.dismiss')}
             </button>
           </div>
         </div>
