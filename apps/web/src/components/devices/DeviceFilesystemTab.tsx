@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   HardDrive,
   RefreshCw,
@@ -10,6 +10,10 @@ import {
 } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
 import type { OSType } from './DeviceList';
+import { formatDate, formatNumber } from '@/i18n/formatters';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 
 type DeviceFilesystemTabProps = {
   deviceId: string;
@@ -73,12 +77,10 @@ type ThresholdEvent = {
   path: string;
 };
 
-const categoryLabels: Record<string, string> = {
-  temp_files: 'Temp Files',
-  browser_cache: 'Browser Cache',
-  package_cache: 'Package Cache',
-  trash: 'Trash',
-};
+type Translate = (key: string, params?: TranslationParams) => string;
+
+const knownCategories = new Set(['temp_files', 'browser_cache', 'package_cache', 'trash']);
+const knownStatuses = new Set(['pending', 'sent', 'completed', 'failed']);
 
 const statusBadgeClasses: Record<string, string> = {
   pending: 'bg-gray-500/15 text-gray-700 border-gray-500/30',
@@ -87,14 +89,14 @@ const statusBadgeClasses: Record<string, string> = {
   failed: 'bg-red-500/15 text-red-700 border-red-500/30',
 };
 
-function formatBytes(value: number | undefined): string {
+function formatBytes(value: number | undefined, locale: Locale): string {
   if (value === undefined || !Number.isFinite(value)) return '-';
   if (value <= 0) return '0 B';
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  if (value < 1024 * 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  return `${(value / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`;
+  if (value < 1024) return `${formatNumber(value, locale)} B`;
+  if (value < 1024 * 1024) return `${formatNumber(value / 1024, locale, { maximumFractionDigits: 1 })} KB`;
+  if (value < 1024 * 1024 * 1024) return `${formatNumber(value / (1024 * 1024), locale, { maximumFractionDigits: 1 })} MB`;
+  if (value < 1024 * 1024 * 1024 * 1024) return `${formatNumber(value / (1024 * 1024 * 1024), locale, { maximumFractionDigits: 2 })} GB`;
+  return `${formatNumber(value / (1024 * 1024 * 1024 * 1024), locale, { maximumFractionDigits: 2 })} TB`;
 }
 
 function normalizeHierarchyPath(path: string): string {
@@ -164,11 +166,11 @@ function collapseAncestorDirectories<T extends { path?: string; sizeBytes?: numb
   return items.filter((_, index) => !pruned.has(index)).slice(0, limit);
 }
 
-function formatDateTime(value: string | undefined): string {
+function formatDateTime(value: string | undefined, locale: Locale): string {
   if (!value) return '-';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString([], {
+  return formatDate(parsed, locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -180,6 +182,22 @@ function formatDateTime(value: string | undefined): string {
 function getDefaultScanPath(osType: OSType): string {
   if (osType === 'windows') return 'C:\\';
   return '/';
+}
+
+function formatCategoryLabel(category: string, t: Translate): string {
+  return knownCategories.has(category) ? t(`deviceFilesystem.categories.${category}`) : category;
+}
+
+function formatStatusLabel(status: string, t: Translate): string {
+  return knownStatuses.has(status) ? t(`deviceFilesystem.statuses.${status}`) : status;
+}
+
+function formatTriggerLabel(trigger: FilesystemSnapshot['trigger'], t: Translate): string {
+  return trigger === 'threshold' ? t('deviceFilesystem.trigger.threshold') : t('deviceFilesystem.trigger.onDemand');
+}
+
+function formatRunModeLabel(scanMode: string | null | undefined, t: Translate): string {
+  return scanMode === 'incremental' ? t('deviceFilesystem.runMode.incremental') : t('deviceFilesystem.runMode.baseline');
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -211,6 +229,8 @@ function readThresholdEvents(commands: CommandRow[]): ThresholdEvent[] {
 }
 
 export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: DeviceFilesystemTabProps) {
+  const { locale, t } = useI18n();
+  const tRef = useRef(t);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<'scan' | 'preview' | null>(null);
@@ -220,14 +240,17 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
   const [thresholdEvents, setThresholdEvents] = useState<ThresholdEvent[]>([]);
   const [scanCommand, setScanCommand] = useState<{ id: string; status: string } | null>(null);
 
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   const fetchSnapshot = useCallback(async () => {
     const response = await fetchWithAuth(`/devices/${deviceId}/filesystem`);
     if (response.status === 404) {
       return null;
     }
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ error: 'Failed to fetch filesystem status' }));
-      throw new Error(body.error || 'Failed to fetch filesystem status');
+      throw new Error(tRef.current('deviceFilesystem.errors.fetchStatus'));
     }
     const body = await response.json();
     return (body.data ?? null) as FilesystemSnapshot | null;
@@ -236,8 +259,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
   const fetchThresholdEvents = useCallback(async () => {
     const response = await fetchWithAuth(`/devices/${deviceId}/commands?limit=100`);
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ error: 'Failed to fetch command history' }));
-      throw new Error(body.error || 'Failed to fetch command history');
+      throw new Error(tRef.current('deviceFilesystem.errors.fetchHistory'));
     }
     const body = await response.json();
     const rows = Array.isArray(body.data) ? (body.data as CommandRow[]) : [];
@@ -253,8 +275,8 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
       const [latestSnapshot, events] = await Promise.all([fetchSnapshot(), fetchThresholdEvents()]);
       setSnapshot(latestSnapshot);
       setThresholdEvents(events);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load filesystem status');
+    } catch {
+      setError(tRef.current('deviceFilesystem.errors.loadStatus'));
     } finally {
       if (!silent) {
         setLoading(false);
@@ -268,14 +290,13 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
     while (Date.now() - startedAt < timeoutMs) {
       const response = await fetchWithAuth(`/devices/${deviceId}/commands/${commandId}`);
       if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: 'Failed to fetch scan status' }));
-        throw new Error(body.error || 'Failed to fetch scan status');
+        throw new Error(tRef.current('deviceFilesystem.errors.fetchScanStatus'));
       }
 
       const body = await response.json();
       const command = (body.data ?? null) as CommandDetail | null;
       if (!command) {
-        throw new Error('Scan command was not found');
+        throw new Error(tRef.current('deviceFilesystem.errors.scanCommandMissing'));
       }
 
       const status = command.status ?? 'pending';
@@ -286,15 +307,13 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
       }
 
       if (status === 'failed') {
-        const result = asRecord(command.result);
-        const error = typeof result?.error === 'string' ? result.error : 'Filesystem scan failed';
-        throw new Error(error);
+        throw new Error(tRef.current('deviceFilesystem.errors.scanFailed'));
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
-    throw new Error('Filesystem scan is still running. Click Refresh in a few moments.');
+    throw new Error(tRef.current('deviceFilesystem.errors.scanStillRunning'));
   }, [deviceId]);
 
   useEffect(() => {
@@ -320,13 +339,12 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
         }),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: 'Filesystem scan failed' }));
-        throw new Error(body.error || 'Filesystem scan failed');
+        throw new Error(tRef.current('deviceFilesystem.errors.scanFailed'));
       }
       const body = await response.json();
       const commandId = typeof body?.data?.commandId === 'string' ? body.data.commandId : null;
       if (!commandId) {
-        throw new Error('Scan command was not queued');
+        throw new Error(tRef.current('deviceFilesystem.errors.scanCommandMissing'));
       }
 
       setScanCommand({ id: commandId, status: 'pending' });
@@ -334,8 +352,8 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
       setCleanupPreview(null);
       await loadAll(true);
       setScanCommand(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Filesystem scan failed');
+    } catch {
+      setError(tRef.current('deviceFilesystem.errors.scanFailed'));
       setScanCommand(null);
     } finally {
       setActionLoading(null);
@@ -351,13 +369,12 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
         body: JSON.stringify({}),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: 'Cleanup preview failed' }));
-        throw new Error(body.error || 'Cleanup preview failed');
+        throw new Error(tRef.current('deviceFilesystem.errors.cleanupPreview'));
       }
       const body = await response.json();
       setCleanupPreview((body.data ?? null) as FilesystemCleanupPreview | null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cleanup preview failed');
+    } catch {
+      setError(tRef.current('deviceFilesystem.errors.cleanupPreview'));
     } finally {
       setActionLoading(null);
     }
@@ -380,7 +397,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
       <div className="flex items-center justify-center rounded-lg border bg-card py-12 shadow-sm">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-3 text-sm text-muted-foreground">Loading disk intelligence...</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('deviceFilesystem.loading')}</p>
         </div>
       </div>
     );
@@ -392,7 +409,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <HardDrive className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">BE-1: Disk Cleanup Intelligence</h3>
+            <h3 className="text-lg font-semibold">{t('deviceFilesystem.title')}</h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -402,7 +419,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
             >
               {actionLoading === 'scan' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              Analyze Now
+              {t('deviceFilesystem.actions.analyze')}
             </button>
             <button
               type="button"
@@ -411,7 +428,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
             >
               {actionLoading === 'preview' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Cleanup Preview
+              {t('deviceFilesystem.actions.cleanupPreview')}
             </button>
             <button
               type="button"
@@ -424,7 +441,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('deviceFilesystem.actions.refresh')}
             </button>
             <button
               type="button"
@@ -432,7 +449,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              Open File Manager
+              {t('deviceFilesystem.actions.openFileManager')}
             </button>
           </div>
         </div>
@@ -450,7 +467,7 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
           <div className="mt-4 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Scan running ({scanCommand.status})</span>
+              <span>{t('deviceFilesystem.scanRunning', { status: formatStatusLabel(scanCommand.status, t) })}</span>
             </div>
           </div>
         )}
@@ -460,7 +477,9 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
               <span>
-                Partial scan result{snapshot.reason ? `: ${snapshot.reason}` : '.'}
+                {snapshot.reason
+                  ? t('deviceFilesystem.partialScanWithReason', { reason: snapshot.reason })
+                  : t('deviceFilesystem.partialScan')}
               </span>
             </div>
           </div>
@@ -468,82 +487,82 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
 
         {!snapshot ? (
           <div className="mt-4 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No filesystem snapshot yet. Run Analyze Now to collect BE-1 data.
+            {t('deviceFilesystem.emptySnapshot')}
           </div>
         ) : (
           <div className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Last Scan</p>
-                <p className="mt-1 text-sm font-medium">{formatDateTime(snapshot.capturedAt)}</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.lastScan')}</p>
+                <p className="mt-1 text-sm font-medium">{formatDateTime(snapshot.capturedAt, locale)}</p>
               </div>
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Trigger</p>
-                <p className="mt-1 text-sm font-medium">{snapshot.trigger === 'threshold' ? 'Threshold' : 'On demand'}</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.trigger')}</p>
+                <p className="mt-1 text-sm font-medium">{formatTriggerLabel(snapshot.trigger, t)}</p>
               </div>
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Run Mode</p>
-                <p className="mt-1 text-sm font-medium">{snapshot.scanMode === 'incremental' ? 'Incremental' : 'Baseline'}</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.runMode')}</p>
+                <p className="mt-1 text-sm font-medium">{formatRunModeLabel(snapshot.scanMode, t)}</p>
               </div>
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Scan Path</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.scanPath')}</p>
                 <p className="mt-1 truncate text-sm font-medium">{snapshot.path ?? '-'}</p>
               </div>
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Scanned Data (in path)</p>
-                <p className="mt-1 text-sm font-medium">{formatBytes(summary.bytesScanned)}</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.scannedData')}</p>
+                <p className="mt-1 text-sm font-medium">{formatBytes(summary.bytesScanned, locale)}</p>
               </div>
               <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">Cleanup Candidates</p>
-                <p className="mt-1 text-sm font-medium">{cleanupCandidateCount.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{t('deviceFilesystem.cards.cleanupCandidates')}</p>
+                <p className="mt-1 text-sm font-medium">{formatNumber(cleanupCandidateCount, locale)}</p>
               </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-md border p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scan Summary</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.sections.scanSummary')}</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">Files scanned</span>
-                  <span className="text-right font-medium">{(summary.filesScanned ?? 0).toLocaleString()}</span>
-                  <span className="text-muted-foreground">Directories scanned</span>
-                  <span className="text-right font-medium">{(summary.dirsScanned ?? 0).toLocaleString()}</span>
-                  <span className="text-muted-foreground">Max depth reached</span>
-                  <span className="text-right font-medium">{summary.maxDepthReached ?? 0}</span>
-                  <span className="text-muted-foreground">Permission denials</span>
-                  <span className="text-right font-medium">{summary.permissionDeniedCount ?? 0}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.filesScanned')}</span>
+                  <span className="text-right font-medium">{formatNumber(summary.filesScanned ?? 0, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.directoriesScanned')}</span>
+                  <span className="text-right font-medium">{formatNumber(summary.dirsScanned ?? 0, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.maxDepthReached')}</span>
+                  <span className="text-right font-medium">{formatNumber(summary.maxDepthReached ?? 0, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.permissionDenials')}</span>
+                  <span className="text-right font-medium">{formatNumber(summary.permissionDeniedCount ?? 0, locale)}</span>
                 </div>
               </div>
 
               <div className="rounded-md border p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Collected Signals</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.sections.collectedSignals')}</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">Old downloads</span>
-                  <span className="text-right font-medium">{oldDownloadsCount.toLocaleString()}</span>
-                  <span className="text-muted-foreground">Unrotated logs</span>
-                  <span className="text-right font-medium">{unrotatedLogCount.toLocaleString()}</span>
-                  <span className="text-muted-foreground">Trash size</span>
-                  <span className="text-right font-medium">{formatBytes(totalTrashBytes)}</span>
-                  <span className="text-muted-foreground">Duplicate groups</span>
-                  <span className="text-right font-medium">{duplicateGroupCount.toLocaleString()}</span>
-                  <span className="text-muted-foreground">Scan errors</span>
-                  <span className="text-right font-medium">{scanErrorCount.toLocaleString()}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.oldDownloads')}</span>
+                  <span className="text-right font-medium">{formatNumber(oldDownloadsCount, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.unrotatedLogs')}</span>
+                  <span className="text-right font-medium">{formatNumber(unrotatedLogCount, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.trashSize')}</span>
+                  <span className="text-right font-medium">{formatBytes(totalTrashBytes, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.duplicateGroups')}</span>
+                  <span className="text-right font-medium">{formatNumber(duplicateGroupCount, locale)}</span>
+                  <span className="text-muted-foreground">{t('deviceFilesystem.metrics.scanErrors')}</span>
+                  <span className="text-right font-medium">{formatNumber(scanErrorCount, locale)}</span>
                 </div>
               </div>
 
               <div className="rounded-md border p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent Threshold Triggers</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.sections.recentThresholdTriggers')}</p>
                 <div className="mt-2 space-y-2">
                   {thresholdEvents.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No recent threshold-triggered scans.</p>
+                    <p className="text-sm text-muted-foreground">{t('deviceFilesystem.emptyThresholdTriggers')}</p>
                   ) : (
                     thresholdEvents.slice(0, 5).map((event) => (
                       <div key={event.id} className="flex items-start justify-between gap-2 rounded bg-muted/20 px-2 py-1.5 text-xs">
                         <div className="min-w-0">
                           <p className="truncate font-medium">{event.path}</p>
-                          <p className="text-muted-foreground">{formatDateTime(event.createdAt)}</p>
+                          <p className="text-muted-foreground">{formatDateTime(event.createdAt, locale)}</p>
                         </div>
                         <span className={`inline-flex rounded-full border px-2 py-0.5 ${statusBadgeClasses[event.status] ?? 'bg-muted/30 text-muted-foreground border-muted'}`}>
-                          {event.status}
+                          {formatStatusLabel(event.status, t)}
                         </span>
                       </div>
                     ))
@@ -552,15 +571,15 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               </div>
 
               <div className="rounded-md border p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Largest Files</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.sections.largestFiles')}</p>
                 <div className="mt-2 space-y-1">
                   {topLargestFiles.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No file data available.</p>
+                    <p className="text-sm text-muted-foreground">{t('deviceFilesystem.emptyFiles')}</p>
                   ) : (
                     topLargestFiles.map((item) => (
                       <div key={item.path} className="flex items-center justify-between gap-2 text-sm">
                         <span className="truncate">{item.path}</span>
-                        <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{formatBytes(item.sizeBytes)}</span>
+                        <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{formatBytes(item.sizeBytes, locale)}</span>
                       </div>
                     ))
                   )}
@@ -568,18 +587,18 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
               </div>
 
               <div className="rounded-md border p-3 lg:col-span-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Largest Directories</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.sections.largestDirectories')}</p>
                 {topLargestDirectories.some((item) => item.estimated) && (
-                  <p className="mt-1 text-xs text-muted-foreground">{'>='} indicates lower-bound size from partial traversal.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t('deviceFilesystem.estimatedSizeNotice')}</p>
                 )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {topLargestDirectories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No directory data available.</p>
+                    <p className="text-sm text-muted-foreground">{t('deviceFilesystem.emptyDirectories')}</p>
                   ) : (
                     topLargestDirectories.map((item) => (
                       <div key={item.path} className="flex items-center justify-between gap-2 rounded bg-muted/20 px-2 py-1.5 text-sm">
                         <span className="truncate">{item.path}</span>
-                        <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{item.estimated ? '>=' : ''}{formatBytes(item.sizeBytes)}</span>
+                        <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{item.estimated ? '>=' : ''}{formatBytes(item.sizeBytes, locale)}</span>
                       </div>
                     ))
                   )}
@@ -594,49 +613,49 @@ export default function DeviceFilesystemTab({ deviceId, osType, onOpenFiles }: D
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
-            <h4 className="font-semibold">Latest Cleanup Preview</h4>
+            <h4 className="font-semibold">{t('deviceFilesystem.preview.title')}</h4>
           </div>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-md border bg-muted/20 p-3">
-              <p className="text-xs text-muted-foreground">Estimated Recovery</p>
-              <p className="mt-1 text-sm font-medium">{formatBytes(cleanupPreview.estimatedBytes)}</p>
+              <p className="text-xs text-muted-foreground">{t('deviceFilesystem.preview.estimatedRecovery')}</p>
+              <p className="mt-1 text-sm font-medium">{formatBytes(cleanupPreview.estimatedBytes, locale)}</p>
             </div>
             <div className="rounded-md border bg-muted/20 p-3">
-              <p className="text-xs text-muted-foreground">Candidate Count</p>
-              <p className="mt-1 text-sm font-medium">{cleanupPreview.candidateCount.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">{t('deviceFilesystem.preview.candidateCount')}</p>
+              <p className="mt-1 text-sm font-medium">{formatNumber(cleanupPreview.candidateCount, locale)}</p>
             </div>
             <div className="rounded-md border bg-muted/20 p-3">
-              <p className="text-xs text-muted-foreground">Categories</p>
-              <p className="mt-1 text-sm font-medium">{cleanupPreview.categories.length}</p>
+              <p className="text-xs text-muted-foreground">{t('deviceFilesystem.preview.categories')}</p>
+              <p className="mt-1 text-sm font-medium">{formatNumber(cleanupPreview.categories.length, locale)}</p>
             </div>
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <div className="rounded-md border p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">By Category</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.preview.byCategory')}</p>
               <div className="mt-2 space-y-1">
                 {previewCategorySummary.map((item) => (
                   <div key={item.category} className="flex items-center justify-between text-sm">
-                    <span>{categoryLabels[item.category] ?? item.category}</span>
-                    <span className="font-medium">{formatBytes(item.estimatedBytes)}</span>
+                    <span>{formatCategoryLabel(item.category, t)}</span>
+                    <span className="font-medium">{formatBytes(item.estimatedBytes, locale)}</span>
                   </div>
                 ))}
                 {previewCategorySummary.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No safe cleanup categories found.</p>
+                  <p className="text-sm text-muted-foreground">{t('deviceFilesystem.preview.emptyCategories')}</p>
                 )}
               </div>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Top Candidates</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('deviceFilesystem.preview.topCandidates')}</p>
               <div className="mt-2 space-y-1">
                 {previewTopCandidates.map((item) => (
                   <div key={item.path} className="flex items-center justify-between gap-2 text-sm">
                     <span className="truncate">{item.path}</span>
-                    <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{formatBytes(item.sizeBytes)}</span>
+                    <span className="shrink-0 whitespace-nowrap text-right font-medium tabular-nums">{formatBytes(item.sizeBytes, locale)}</span>
                   </div>
                 ))}
                 {previewTopCandidates.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No candidates available.</p>
+                  <p className="text-sm text-muted-foreground">{t('deviceFilesystem.preview.emptyCandidates')}</p>
                 )}
               </div>
             </div>
