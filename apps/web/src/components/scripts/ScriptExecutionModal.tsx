@@ -3,12 +3,14 @@ import { X, Search, Play, Loader2, CheckCircle, AlertCircle, Filter } from 'luci
 import { cn } from '@/lib/utils';
 import { Dialog } from '../shared/Dialog';
 import ProgressBar, { ProgressItemList, type ProgressItem } from '../shared/ProgressBar';
-import type { Script, ScriptLanguage } from './ScriptList';
+import type { Script } from './ScriptList';
 import type { ScriptParameter } from './ScriptForm';
 import type { FilterConditionGroup } from '@breeze/shared';
 import { FilterBuilder, DEFAULT_FILTER_FIELDS } from '../filters/FilterBuilder';
 import { useFilterPreview } from '../../hooks/useFilterPreview';
 import ScriptParametersForm, { validateParameters as validateParamsHelper } from './ScriptParametersForm';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 export type Device = {
   id: string;
@@ -40,13 +42,6 @@ type ScriptExecutionModalProps = {
 
 type ExecutionState = 'idle' | 'executing' | 'success' | 'error';
 
-const languageLabels: Record<ScriptLanguage, string> = {
-  powershell: 'PowerShell',
-  bash: 'Bash',
-  python: 'Python',
-  cmd: 'CMD'
-};
-
 export default function ScriptExecutionModal({
   script,
   devices,
@@ -55,6 +50,7 @@ export default function ScriptExecutionModal({
   onClose,
   onExecute
 }: ScriptExecutionModalProps) {
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState('');
   const [siteFilter, setSiteFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('online');
@@ -165,7 +161,7 @@ export default function ScriptExecutionModal({
     if (!showConfirm) {
       if (!validateParameters()) return;
       if (selectedDeviceIds.size === 0) {
-        setErrorMessage('Please select at least one device');
+        setErrorMessage(t('scripts.executionModal.selectDeviceRequired'));
         return;
       }
       setShowConfirm(true);
@@ -186,7 +182,7 @@ export default function ScriptExecutionModal({
       }, 1500);
     } catch (err) {
       setExecutionState('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Execution failed');
+      setErrorMessage(err instanceof Error ? err.message : t('scripts.executionModal.executionFailed'));
       setShowConfirm(false);
     }
   };
@@ -199,18 +195,28 @@ export default function ScriptExecutionModal({
     setErrorMessage(undefined);
   };
 
+  const selectedCount = selectedDeviceIds.size;
+  const formattedSelectedCount = formatNumber(selectedCount, locale);
+  const runAsLabel = runAs === 'system'
+    ? t('scripts.executionModal.runAsSystem')
+    : t('scripts.executionModal.runAsUser');
+  const osRequirement = script.osTypes
+    .map(os => t(`scripts.list.os.${os}`, undefined, os))
+    .join(` ${t('scripts.executionModal.or')} `);
+
   return (
-    <Dialog open={isOpen} onClose={handleClose} title="Execute Script" maxWidth="3xl" className="max-h-[90vh] overflow-hidden flex flex-col">
+    <Dialog open={isOpen} onClose={handleClose} title={t('scripts.executionModal.title')} maxWidth="3xl" className="max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">Execute Script</h2>
+            <h2 className="text-lg font-semibold">{t('scripts.executionModal.title')}</h2>
             <p className="text-sm text-muted-foreground">{script.name}</p>
           </div>
           <button
             type="button"
             onClick={handleClose}
             disabled={executionState === 'executing'}
+            aria-label={t('common.dismiss')}
             className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -223,16 +229,16 @@ export default function ScriptExecutionModal({
           <div className="rounded-md border bg-muted/20 p-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Language</p>
-                <p className="text-sm font-medium">{languageLabels[script.language]}</p>
+                <p className="text-xs font-medium text-muted-foreground">{t('scripts.executionModal.language')}</p>
+                <p className="text-sm font-medium">{t(`scripts.list.languages.${script.language}`, undefined, script.language)}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Category</p>
+                <p className="text-xs font-medium text-muted-foreground">{t('scripts.executionModal.category')}</p>
                 <p className="text-sm font-medium">{script.category}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Target OS</p>
-                <p className="text-sm font-medium">{script.osTypes.join(', ')}</p>
+                <p className="text-xs font-medium text-muted-foreground">{t('scripts.executionModal.targetOs')}</p>
+                <p className="text-sm font-medium">{script.osTypes.map(os => t(`scripts.list.os.${os}`, undefined, os)).join(', ')}</p>
               </div>
             </div>
             {script.description && (
@@ -242,19 +248,19 @@ export default function ScriptExecutionModal({
 
           {/* Execution Context */}
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Run As</h3>
+            <h3 className="text-sm font-semibold">{t('scripts.executionModal.runAs')}</h3>
             <select
               value={runAs}
               onChange={e => setRunAs(e.target.value as 'system' | 'user')}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-80"
             >
-              <option value="system">System</option>
-              <option value="user">Logged-in user</option>
+              <option value="system">{t('scripts.executionModal.runAsSystem')}</option>
+              <option value="user">{t('scripts.executionModal.runAsUser')}</option>
             </select>
             <p className="text-xs text-muted-foreground">
               {runAs === 'system'
-                ? 'Runs in the agent service context.'
-                : 'Runs in the currently logged-in user context when a user helper is connected.'}
+                ? t('scripts.executionModal.runAsSystemDescription')
+                : t('scripts.executionModal.runAsUserDescription')}
             </p>
           </div>
 
@@ -270,14 +276,14 @@ export default function ScriptExecutionModal({
           {/* Device Selection */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Select Devices</h3>
+              <h3 className="text-sm font-semibold">{t('scripts.executionModal.selectDevices')}</h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleSelectAll}
                   className="text-xs text-primary hover:underline"
                 >
-                  Select all online
+                  {t('scripts.executionModal.selectAllOnline')}
                 </button>
                 {selectedDeviceIds.size > 0 && (
                   <button
@@ -285,7 +291,7 @@ export default function ScriptExecutionModal({
                     onClick={handleClearSelection}
                     className="text-xs text-muted-foreground hover:underline"
                   >
-                    Clear ({selectedDeviceIds.size})
+                    {t('scripts.executionModal.clearSelection', { count: formattedSelectedCount })}
                   </button>
                 )}
               </div>
@@ -297,7 +303,7 @@ export default function ScriptExecutionModal({
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="search"
-                  placeholder="Search by hostname..."
+                  placeholder={t('scripts.executionModal.searchHostname')}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -309,7 +315,7 @@ export default function ScriptExecutionModal({
                   onChange={e => setSiteFilter(e.target.value)}
                   className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="all">All Sites</option>
+                  <option value="all">{t('scripts.executionModal.allSites')}</option>
                   {sites.map(site => (
                     <option key={site.id} value={site.id}>
                       {site.name}
@@ -322,10 +328,10 @@ export default function ScriptExecutionModal({
                 onChange={e => setStatusFilter(e.target.value)}
                 className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="all">All Status</option>
-                <option value="online">Online</option>
-                <option value="offline">Offline</option>
-                <option value="maintenance">Maintenance</option>
+                <option value="all">{t('scripts.executionModal.allStatus')}</option>
+                <option value="online">{t('devices.status.online')}</option>
+                <option value="offline">{t('devices.status.offline')}</option>
+                <option value="maintenance">{t('devices.status.maintenance')}</option>
               </select>
             </div>
 
@@ -340,10 +346,10 @@ export default function ScriptExecutionModal({
                 )}
               >
                 <Filter className="h-3 w-3" />
-                Advanced Filters
+                {t('scripts.executionModal.advancedFilters')}
                 {showAdvancedFilter && advancedFilterIds && (
                   <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px]">
-                    {advancedFilterIds.size} match
+                    {t('scripts.executionModal.matchCount', { count: formatNumber(advancedFilterIds.size, locale) })}
                   </span>
                 )}
               </button>
@@ -363,7 +369,7 @@ export default function ScriptExecutionModal({
             <div className="rounded-md border max-h-60 overflow-y-auto">
               {filteredDevices.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No compatible devices found. This script requires {script.osTypes.join(' or ')}.
+                  {t('scripts.executionModal.noCompatibleDevices', { osList: osRequirement })}
                 </div>
               ) : (
                 <div className="divide-y">
@@ -388,14 +394,14 @@ export default function ScriptExecutionModal({
                         <p className="text-xs text-muted-foreground">{device.siteName}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground capitalize">{device.os}</span>
+                        <span className="text-xs text-muted-foreground">{t(`scripts.list.os.${device.os}`, undefined, device.os)}</span>
                         <span className={cn(
                           'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
                           device.status === 'online' && 'bg-success/15 text-success',
                           device.status === 'offline' && 'bg-destructive/15 text-destructive',
                           device.status === 'maintenance' && 'bg-warning/15 text-warning'
                         )}>
-                          {device.status}
+                          {t(`devices.status.${device.status}`, undefined, device.status)}
                         </span>
                       </div>
                     </label>
@@ -412,8 +418,8 @@ export default function ScriptExecutionModal({
                 current={executionState === 'success' ? selectedDeviceIds.size : 0}
                 total={selectedDeviceIds.size}
                 label={executionState === 'executing'
-                  ? `Submitting to ${selectedDeviceIds.size} devices...`
-                  : `Submitted to ${selectedDeviceIds.size} devices`}
+                  ? t('scripts.executionModal.submittingProgress', { count: formattedSelectedCount })
+                  : t('scripts.executionModal.submittedProgress', { count: formattedSelectedCount })}
                 variant={executionState === 'success' ? 'success' : 'default'}
               />
               <ProgressItemList
@@ -442,10 +448,14 @@ export default function ScriptExecutionModal({
           {showConfirm && executionState === 'idle' && (
             <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
               <p className="text-sm font-medium text-warning">
-                Confirm Execution
+                {t('scripts.executionModal.confirmTitle')}
               </p>
               <p className="text-sm text-warning/80 mt-1">
-                Run &ldquo;{script.name}&rdquo; on {selectedDeviceIds.size} device(s) as {runAs === 'system' ? 'System' : 'logged-in user'}. Scripts are queued and begin executing immediately.
+                {t('scripts.executionModal.confirmDescription', {
+                  name: script.name,
+                  count: formattedSelectedCount,
+                  runAs: runAsLabel,
+                })}
               </p>
             </div>
           )}
@@ -454,7 +464,7 @@ export default function ScriptExecutionModal({
         {/* Footer */}
         <div className="flex items-center justify-between border-t px-6 py-4">
           <p className="text-sm text-muted-foreground">
-            {selectedDeviceIds.size} device(s) selected
+            {t('scripts.executionModal.selectedCount', { count: formattedSelectedCount })}
           </p>
           <div className="flex items-center gap-3">
             <button
@@ -463,7 +473,7 @@ export default function ScriptExecutionModal({
               disabled={executionState === 'executing'}
               className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -491,12 +501,12 @@ export default function ScriptExecutionModal({
                 <Play className="h-4 w-4" />
               )}
               {executionState === 'executing'
-                ? 'Executing...'
+                ? t('scripts.executionModal.executing')
                 : executionState === 'success'
-                  ? 'Started!'
+                  ? t('scripts.executionModal.started')
                   : showConfirm
-                    ? 'Confirm Execute'
-                    : 'Execute'}
+                    ? t('scripts.executionModal.confirmExecute')
+                    : t('scripts.executionModal.execute')}
             </button>
           </div>
         </div>
