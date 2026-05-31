@@ -1,8 +1,12 @@
 ---
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ApiKeysPage from '../../components/settings/ApiKeysPage';
+import { resolveLocaleFromRequest } from '../../i18n/locales';
+import { translate } from '../../i18n/resources';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<DashboardLayout title="API Keys">
-  <ApiKeysPage client:load />
+<DashboardLayout title={translate(locale, 'settings.apiKeys.title')} locale={locale}>
+  <ApiKeysPage locale={locale} client:load />
 </DashboardLayout>
