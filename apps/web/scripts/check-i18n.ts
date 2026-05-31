@@ -185,6 +185,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/settings/ApiKeyList.tsx',
   'src/components/settings/ApiKeysPage.tsx',
   'src/components/settings/ConnectedAppsList.tsx',
+  'src/components/settings/EnrollmentKeyManager.tsx',
   'src/components/settings/MFASettings.tsx',
   'src/components/settings/PartnerSettingsPage.tsx',
   'src/components/settings/PartnerSettingsCard.tsx',
@@ -206,6 +207,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/pages/settings/profile.astro',
   'src/pages/settings/api-keys.astro',
   'src/pages/settings/connected-apps.astro',
+  'src/pages/settings/enrollment-keys.astro',
   'src/pages/settings/index.astro',
   'src/pages/setup.astro',
 ];

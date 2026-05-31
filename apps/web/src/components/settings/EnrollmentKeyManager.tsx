@@ -3,6 +3,8 @@ import { fetchWithAuth } from '../../stores/auth';
 import { useOrgStore } from '../../stores/orgStore';
 import { fallbackInstallerFilename, filenameFromContentDisposition } from '@/lib/downloadFilename';
 import { extractApiError } from '@/lib/apiError';
+import type { Locale } from '@/i18n/locales';
+import { useI18n } from '@/i18n/react';
 import { navigateTo } from '@/lib/navigation';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { showToast } from '../shared/Toast';
@@ -20,17 +22,20 @@ interface EnrollmentKey {
   createdAt: string;
 }
 
-interface CreateFormValues {
-  orgId: string;
-  siteId?: string;
-  name: string;
-  maxUsage?: number;
-  expiresAt?: string;
-}
-
 type ModalMode = 'closed' | 'create' | 'delete';
 
-export default function EnrollmentKeyManager() {
+type EnrollmentKeyManagerProps = {
+  locale?: Locale;
+};
+
+function formatDate(value: string | null | undefined, locale: Locale, fallback: string): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale);
+}
+
+export default function EnrollmentKeyManager({ locale: initialLocale = 'en' }: EnrollmentKeyManagerProps) {
+  const { locale, t } = useI18n(initialLocale);
   const [keys, setKeys] = useState<EnrollmentKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -60,7 +65,7 @@ export default function EnrollmentKeyManager() {
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch enrollment keys');
+        throw new Error(t('settings.enrollmentKeys.errors.load'));
       }
       const data = await response.json();
       setKeys(data.data ?? []);
@@ -69,11 +74,11 @@ export default function EnrollmentKeyManager() {
       setTotalPages(Math.max(1, Math.ceil(total / limit)));
       setCurrentPage(data.pagination?.page ?? page);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchKeys();
@@ -141,7 +146,7 @@ export default function EnrollmentKeyManager() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(extractApiError(data, 'Failed to create enrollment key'));
+        throw new Error(extractApiError(data, t('settings.enrollmentKeys.errors.create')));
       }
 
       const created = await response.json().catch(() => ({} as Record<string, unknown>));
@@ -152,7 +157,7 @@ export default function EnrollmentKeyManager() {
       await fetchKeys(currentPage);
       handleCloseModal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {
       setSubmitting(false);
     }
@@ -167,15 +172,15 @@ export default function EnrollmentKeyManager() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete enrollment key');
+        throw new Error(t('settings.enrollmentKeys.errors.delete'));
       }
 
       const deletedName = selectedKey.name;
       await fetchKeys(currentPage);
       handleCloseModal();
-      showToast({ message: `Enrollment key "${deletedName}" deleted`, type: 'success' });
+      showToast({ message: t('settings.enrollmentKeys.deletedToast', { name: deletedName }), type: 'success' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {
       setSubmitting(false);
     }
@@ -198,7 +203,7 @@ export default function EnrollmentKeyManager() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(extractApiError(data, 'Failed to rotate enrollment key'));
+        throw new Error(extractApiError(data, t('settings.enrollmentKeys.errors.rotate')));
       }
 
       const rotated = await response.json().catch(() => ({} as Record<string, unknown>));
@@ -207,7 +212,7 @@ export default function EnrollmentKeyManager() {
       }
       await fetchKeys(currentPage);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {
       setSubmitting(false);
     }
@@ -220,8 +225,8 @@ export default function EnrollmentKeyManager() {
       const response = await fetchWithAuth(`/enrollment-keys/${keyId}/installer/${platform}`);
 
       if (!response.ok) {
-        const body = await response.json().catch(() => ({ error: 'Download failed' }));
-        setError(body.error || `Download failed (${response.status})`);
+        const body = await response.json().catch(() => ({ error: t('settings.enrollmentKeys.errors.download') }));
+        setError(body.error || t('settings.enrollmentKeys.errors.downloadStatus', { status: response.status }));
         return;
       }
 
@@ -238,8 +243,8 @@ export default function EnrollmentKeyManager() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setError(`Failed to download installer: ${message}`);
+      const message = err instanceof Error ? err.message : t('errors.unknown');
+      setError(t('settings.enrollmentKeys.errors.downloadWithMessage', { message }));
     } finally {
       setDownloading(false);
     }
@@ -252,9 +257,13 @@ export default function EnrollmentKeyManager() {
     key.maxUsage !== null && key.usageCount >= key.maxUsage;
 
   const getKeyStatus = (key: EnrollmentKey) => {
-    if (isExpired(key)) return { label: 'Expired', className: 'bg-red-500/10 text-red-400 border-red-500/30' };
-    if (isExhausted(key)) return { label: 'Exhausted', className: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
-    return { label: 'Active', className: 'bg-green-500/10 text-green-400 border-green-500/30' };
+    if (isExpired(key)) {
+      return { kind: 'expired', label: t('settings.enrollmentKeys.statuses.expired'), className: 'bg-red-500/10 text-red-400 border-red-500/30' };
+    }
+    if (isExhausted(key)) {
+      return { kind: 'exhausted', label: t('settings.enrollmentKeys.statuses.exhausted'), className: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
+    }
+    return { kind: 'active', label: t('settings.enrollmentKeys.statuses.active'), className: 'bg-green-500/10 text-green-400 border-green-500/30' };
   };
 
   if (loading) {
@@ -262,7 +271,7 @@ export default function EnrollmentKeyManager() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading enrollment keys...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('settings.enrollmentKeys.loading')}</p>
         </div>
       </div>
     );
@@ -277,7 +286,7 @@ export default function EnrollmentKeyManager() {
           onClick={() => fetchKeys()}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Try again
+          {t('common.tryAgain')}
         </button>
       </div>
     );
@@ -287,9 +296,9 @@ export default function EnrollmentKeyManager() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Enrollment Keys</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('settings.enrollmentKeys.title')}</h1>
           <p className="text-muted-foreground">
-            Create and manage keys for agent enrollment. Use these keys with{' '}
+            {t('settings.enrollmentKeys.descriptionPrefix')}{' '}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">breeze-agent enroll &lt;key&gt;</code>
           </p>
         </div>
@@ -301,7 +310,7 @@ export default function EnrollmentKeyManager() {
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Create Key
+          {t('settings.enrollmentKeys.createKey')}
         </button>
       </div>
 
@@ -314,7 +323,7 @@ export default function EnrollmentKeyManager() {
       {newlyCreatedKey && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
           <p className="font-medium text-amber-700 dark:text-amber-300">
-            Save this enrollment key now. It will not be shown again.
+            {t('settings.enrollmentKeys.saveNow')}
           </p>
           <code className="mt-2 block overflow-x-auto rounded bg-background px-2 py-1 font-mono text-xs">
             {newlyCreatedKey}
@@ -325,14 +334,14 @@ export default function EnrollmentKeyManager() {
               onClick={() => handleCopyKey(newlyCreatedKey, '__newly-created__')}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
             >
-              {copiedId === '__newly-created__' ? 'Copied' : 'Copy key'}
+              {copiedId === '__newly-created__' ? t('mcpUrlCard.copied') : t('settings.enrollmentKeys.copyKey')}
             </button>
             <button
               type="button"
               onClick={() => setNewlyCreatedKey(null)}
               className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
             >
-              Dismiss
+              {t('common.dismiss')}
             </button>
           </div>
         </div>
@@ -344,20 +353,20 @@ export default function EnrollmentKeyManager() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Key</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Usage</th>
-                <th className="px-4 py-3">Expires</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.name')}</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.key')}</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.status')}</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.usage')}</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.expires')}</th>
+                <th className="px-4 py-3">{t('settings.enrollmentKeys.created')}</th>
+                <th className="px-4 py-3 text-right">{t('settings.enrollmentKeys.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {keys.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    No enrollment keys found. Create one to get started.
+                    {t('settings.enrollmentKeys.empty')}
                   </td>
                 </tr>
               ) : (
@@ -376,7 +385,7 @@ export default function EnrollmentKeyManager() {
                               type="button"
                               onClick={() => handleCopyKey(key.key as string, key.id)}
                               className="text-muted-foreground hover:text-foreground"
-                              title="Copy full key"
+                              title={t('settings.enrollmentKeys.copyFullKey')}
                             >
                               {copiedId === key.id ? (
                                 <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -390,7 +399,7 @@ export default function EnrollmentKeyManager() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Hidden</span>
+                          <span className="text-xs text-muted-foreground">{t('settings.enrollmentKeys.hidden')}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -403,16 +412,16 @@ export default function EnrollmentKeyManager() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {key.expiresAt
-                          ? new Date(key.expiresAt).toLocaleDateString()
-                          : 'Never'}
+                          ? formatDate(key.expiresAt, locale, t('settings.enrollmentKeys.never'))
+                          : t('settings.enrollmentKeys.never')}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(key.createdAt).toLocaleDateString()}
+                        {formatDate(key.createdAt, locale, t('settings.enrollmentKeys.never'))}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="relative inline-flex items-center gap-1">
                           {/* Download Installer Dropdown - only for active keys with siteId */}
-                          {status.label === 'Active' && key.siteId && (
+                          {status.kind === 'active' && key.siteId && (
                             <div className="relative">
                               <button
                                 type="button"
@@ -422,9 +431,9 @@ export default function EnrollmentKeyManager() {
                                 }}
                                 disabled={downloading}
                                 className="rounded-md px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50"
-                                title="Download pre-configured installer"
+                                title={t('settings.enrollmentKeys.downloadInstaller')}
                               >
-                                {downloading ? 'Downloading...' : 'Download'}
+                                {downloading ? t('settings.enrollmentKeys.downloading') : t('settings.enrollmentKeys.download')}
                               </button>
                               {downloadDropdownId === key.id && (
                                 <div className="absolute right-0 top-full z-10 mt-1 w-44 rounded-md border bg-popover py-1 shadow-md">
@@ -436,7 +445,7 @@ export default function EnrollmentKeyManager() {
                                     }}
                                     className="w-full px-3 py-1.5 text-left text-xs hover:bg-muted"
                                   >
-                                    Windows (.msi)
+                                    {t('settings.enrollmentKeys.downloadWindows')}
                                   </button>
                                   <button
                                     type="button"
@@ -446,7 +455,7 @@ export default function EnrollmentKeyManager() {
                                     }}
                                     className="w-full px-3 py-1.5 text-left text-xs hover:bg-muted"
                                   >
-                                    macOS (.zip)
+                                    {t('settings.enrollmentKeys.downloadMacos')}
                                   </button>
                                 </div>
                               )}
@@ -458,14 +467,14 @@ export default function EnrollmentKeyManager() {
                             disabled={submitting}
                             className="rounded-md px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50"
                           >
-                            Rotate
+                            {t('settings.enrollmentKeys.rotate')}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleOpenDelete(key)}
                             className="rounded-md px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
                           >
-                            Delete
+                            {t('settings.enrollmentKeys.delete')}
                           </button>
                         </div>
                       </td>
@@ -481,7 +490,7 @@ export default function EnrollmentKeyManager() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <span className="text-xs text-muted-foreground">
-              Page {currentPage} of {totalPages}
+              {t('settings.enrollmentKeys.pageCount', { current: currentPage, total: totalPages })}
             </span>
             <div className="flex gap-2">
               <button
@@ -490,7 +499,7 @@ export default function EnrollmentKeyManager() {
                 disabled={currentPage <= 1}
                 className="rounded-md border px-3 py-1 text-xs disabled:opacity-40"
               >
-                Previous
+                {t('settings.enrollmentKeys.previous')}
               </button>
               <button
                 type="button"
@@ -498,7 +507,7 @@ export default function EnrollmentKeyManager() {
                 disabled={currentPage >= totalPages}
                 className="rounded-md border px-3 py-1 text-xs disabled:opacity-40"
               >
-                Next
+                {t('settings.enrollmentKeys.next')}
               </button>
             </div>
           </div>
@@ -509,38 +518,38 @@ export default function EnrollmentKeyManager() {
       {modalMode === 'create' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
           <div className="w-full max-w-lg rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Create Enrollment Key</h2>
+            <h2 className="text-lg font-semibold">{t('settings.enrollmentKeys.createTitle')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Generate a new key for agent enrollment.
+              {t('settings.enrollmentKeys.createDescription')}
             </p>
             <form onSubmit={handleCreateSubmit} className="mt-4 space-y-4">
               <div>
-                <label className="text-sm font-medium">Name</label>
+                <label className="text-sm font-medium">{t('settings.enrollmentKeys.name')}</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g., Production servers"
+                  placeholder={t('settings.enrollmentKeys.namePlaceholder')}
                   required
                   className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Max Usage (optional)</label>
+                <label className="text-sm font-medium">{t('settings.enrollmentKeys.maxUsage')}</label>
                 <input
                   type="number"
                   value={formMaxUsage}
                   onChange={(e) => setFormMaxUsage(e.target.value)}
-                  placeholder="Unlimited"
+                  placeholder={t('settings.enrollmentKeys.unlimited')}
                   min={1}
                   className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Maximum number of agents that can enroll with this key.
+                  {t('settings.enrollmentKeys.maxUsageHint')}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium">Expires At (optional)</label>
+                <label className="text-sm font-medium">{t('settings.enrollmentKeys.expiresAt')}</label>
                 <input
                   type="datetime-local"
                   value={formExpiresAt}
@@ -554,14 +563,14 @@ export default function EnrollmentKeyManager() {
                   onClick={handleCloseModal}
                   className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || !formName.trim()}
                   className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {submitting ? 'Creating...' : 'Create Key'}
+                  {submitting ? t('settings.enrollmentKeys.creating') : t('settings.enrollmentKeys.createKey')}
                 </button>
               </div>
             </form>
@@ -573,14 +582,14 @@ export default function EnrollmentKeyManager() {
       {modalMode === 'delete' && selectedKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Delete Enrollment Key</h2>
+            <h2 className="text-lg font-semibold">{t('settings.enrollmentKeys.deleteTitle')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete{' '}
-              <span className="font-medium">{selectedKey.name}</span>? This action cannot be undone.
+              {t('settings.enrollmentKeys.deleteConfirmPrefix')}{' '}
+              <span className="font-medium">{selectedKey.name}</span>{t('settings.enrollmentKeys.deleteConfirmSuffix')}
             </p>
             <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3">
               <p className="text-xs text-destructive">
-                Agents will no longer be able to enroll using this key.
+                {t('settings.enrollmentKeys.deleteWarning')}
               </p>
             </div>
             <div className="mt-6 flex justify-end gap-3">
@@ -589,7 +598,7 @@ export default function EnrollmentKeyManager() {
                 onClick={handleCloseModal}
                 className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -597,7 +606,7 @@ export default function EnrollmentKeyManager() {
                 disabled={submitting}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Deleting...' : 'Delete Key'}
+                {submitting ? t('settings.enrollmentKeys.deleting') : t('settings.enrollmentKeys.deleteKey')}
               </button>
             </div>
           </div>
@@ -607,9 +616,9 @@ export default function EnrollmentKeyManager() {
         open={rotateTarget !== null}
         onClose={() => setRotateTarget(null)}
         onConfirm={handleConfirmRotate}
-        title="Rotate Enrollment Key"
-        message={`Rotate "${rotateTarget?.name}" now? Existing enrollments will continue to work, but new enrollments must use the new key.`}
-        confirmLabel="Rotate Key"
+        title={t('settings.enrollmentKeys.rotateTitle')}
+        message={t('settings.enrollmentKeys.rotateConfirm', { name: rotateTarget?.name ?? '' })}
+        confirmLabel={t('settings.enrollmentKeys.rotateKey')}
         variant="warning"
         isLoading={submitting}
       />
