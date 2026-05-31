@@ -11,6 +11,8 @@ import {
 import { cn, leftPxClass, paddingLeftPxClass, topPxClass } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 type ScriptCategory = {
   id: string;
@@ -150,6 +152,7 @@ export default function ScriptCategoryTree({
   scripts: externalScripts,
   onSelectCategory
 }: ScriptCategoryTreeProps) {
+  const { locale, t } = useI18n();
   const [internalCategories, setInternalCategories] = useState<ScriptCategory[]>([]);
   const [scripts, setScripts] = useState<ScriptItem[]>(externalScripts ?? []);
   const [loading, setLoading] = useState(!externalCategories && !externalScripts);
@@ -181,7 +184,7 @@ export default function ScriptCategoryTree({
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch scripts');
+        throw new Error(t('scripts.categories.fetchFailed'));
       }
 
       const data = await response.json();
@@ -209,11 +212,11 @@ export default function ScriptCategoryTree({
 
       setScripts(scriptItems);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('scripts.categories.errorGeneric'));
     } finally {
       setLoading(false);
     }
-  }, [externalCategories, externalScripts]);
+  }, [externalCategories, externalScripts, t]);
 
   useEffect(() => {
     fetchData();
@@ -239,9 +242,9 @@ export default function ScriptCategoryTree({
   }, [contextMenu]);
 
   const selectedCategoryName = useMemo(() => {
-    if (!selectedCategoryId) return 'All Scripts';
-    return findCategoryName(categories, selectedCategoryId) ?? 'Selected Category';
-  }, [categories, selectedCategoryId]);
+    if (!selectedCategoryId) return t('scripts.categories.allScripts');
+    return findCategoryName(categories, selectedCategoryId) ?? t('scripts.categories.selectedCategory');
+  }, [categories, selectedCategoryId, t]);
 
   const highlightedCategoryIds = useMemo(() => {
     if (!selectedCategoryId) return new Set<string>();
@@ -304,7 +307,7 @@ export default function ScriptCategoryTree({
 
       setRenameTargetId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to rename category');
+      setError(err instanceof Error ? err.message : t('scripts.categories.renameFailed'));
     } finally {
       setSaving(false);
     }
@@ -404,7 +407,7 @@ export default function ScriptCategoryTree({
           </button>
           {hasChildren && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {category.children?.length}
+              {formatNumber(category.children?.length ?? 0, locale)}
             </span>
           )}
           <button
@@ -432,7 +435,7 @@ export default function ScriptCategoryTree({
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Loading categories...</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t('scripts.categories.loading')}</p>
           </div>
         </div>
       </div>
@@ -450,7 +453,7 @@ export default function ScriptCategoryTree({
           onClick={fetchData}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Try again
+          {t('scripts.categories.tryAgain')}
         </button>
       </div>
     );
@@ -462,8 +465,8 @@ export default function ScriptCategoryTree({
         <div className="w-full lg:w-1/2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Script Categories</h2>
-              <p className="text-sm text-muted-foreground">Organize scripts into nested folders.</p>
+              <h2 className="text-lg font-semibold">{t('scripts.categories.title')}</h2>
+              <p className="text-sm text-muted-foreground">{t('scripts.categories.subtitle')}</p>
             </div>
             <button
               type="button"
@@ -471,7 +474,7 @@ export default function ScriptCategoryTree({
               className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
             >
               <FolderPlus className="h-4 w-4" />
-              New Category
+              {t('scripts.categories.newCategory')}
             </button>
           </div>
 
@@ -484,7 +487,7 @@ export default function ScriptCategoryTree({
           <div className="mt-4 space-y-2">
             {categories.length === 0 ? (
               <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No categories found. Create one to get started.
+                {t('scripts.categories.emptyCategories')}
               </div>
             ) : (
               categories.map(category => renderCategory(category))
@@ -497,13 +500,13 @@ export default function ScriptCategoryTree({
             <p className="text-sm font-semibold">{selectedCategoryName}</p>
             <p className="text-xs text-muted-foreground">
               {selectedCategoryId
-                ? `Scripts tagged under ${selectedCategoryName} and its subcategories`
-                : 'Select a category to highlight its scripts.'}
+                ? t('scripts.categories.selectedDescription', { name: selectedCategoryName })
+                : t('scripts.categories.selectPrompt')}
             </p>
             <div className="mt-4 space-y-2 max-h-80 overflow-y-auto">
               {scripts.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  No scripts found.
+                  {t('scripts.categories.noScripts')}
                 </div>
               ) : (
                 scripts.map(script => {
@@ -520,10 +523,10 @@ export default function ScriptCategoryTree({
                     >
                       <div>
                         <p className="font-medium">{script.name}</p>
-                        <p className="text-xs text-muted-foreground">ID: {script.id}</p>
+                        <p className="text-xs text-muted-foreground">{t('scripts.categories.idLabel', { id: script.id })}</p>
                       </div>
                       <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusStyles[script.status])}>
-                        {script.status}
+                        {t(`scripts.list.status.${script.status}`)}
                       </span>
                     </div>
                   );
@@ -551,7 +554,7 @@ export default function ScriptCategoryTree({
             className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted"
           >
             <Pencil className="h-4 w-4" />
-            Rename
+            {t('scripts.categories.rename')}
           </button>
           <button
             type="button"
@@ -562,7 +565,7 @@ export default function ScriptCategoryTree({
             className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted"
           >
             <FolderPlus className="h-4 w-4" />
-            Add Subcategory
+            {t('scripts.categories.addSubcategory')}
           </button>
           <button
             type="button"
@@ -573,7 +576,7 @@ export default function ScriptCategoryTree({
             className="flex w-full items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-500/10"
           >
             <Trash2 className="h-4 w-4" />
-            Delete
+            {t('scripts.categories.delete')}
           </button>
         </div>
       )}
@@ -581,8 +584,8 @@ export default function ScriptCategoryTree({
       {renameTargetId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-            <h3 className="text-lg font-semibold">Rename Category</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Update the category title.</p>
+            <h3 className="text-lg font-semibold">{t('scripts.categories.renameTitle')}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t('scripts.categories.renameDescription')}</p>
             <input
               value={renameValue}
               onChange={event => setRenameValue(event.target.value)}
@@ -595,7 +598,7 @@ export default function ScriptCategoryTree({
                 disabled={saving}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -604,7 +607,7 @@ export default function ScriptCategoryTree({
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save
+                {t('common.saveChanges')}
               </button>
             </div>
           </div>
@@ -615,12 +618,12 @@ export default function ScriptCategoryTree({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
             <h3 className="text-lg font-semibold">
-              {newCategoryParentId === 'root' ? 'New Category' : 'Add Subcategory'}
+              {newCategoryParentId === 'root' ? t('scripts.categories.newCategory') : t('scripts.categories.addSubcategory')}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {newCategoryParentId === 'root'
-                ? 'Create a new top-level category.'
-                : 'Name the new subcategory.'}
+                ? t('scripts.categories.newCategoryDescription')
+                : t('scripts.categories.newSubcategoryDescription')}
             </p>
             <input
               value={newCategoryName}
@@ -636,14 +639,14 @@ export default function ScriptCategoryTree({
                 }}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleAddSubcategory}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-              >
-                Add
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+                {t('scripts.categories.add')}
               </button>
             </div>
           </div>
@@ -653,9 +656,9 @@ export default function ScriptCategoryTree({
       {deleteTargetId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-red-600">Delete Category</h3>
+            <h3 className="text-lg font-semibold text-red-600">{t('scripts.categories.deleteTitle')}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              This will remove the category and its subcategories. Scripts will remain but become uncategorized.
+              {t('scripts.categories.deleteDescription')}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -663,14 +666,14 @@ export default function ScriptCategoryTree({
                 onClick={() => setDeleteTargetId(null)}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleDeleteCategory}
-                className="rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
-              >
-                Delete
+              className="rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
+            >
+                {t('scripts.categories.delete')}
               </button>
             </div>
           </div>

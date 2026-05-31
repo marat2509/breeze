@@ -155,6 +155,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/scripts/ScriptAiInput.tsx',
   'src/components/scripts/ScriptAiMessages.tsx',
   'src/components/scripts/ScriptAiPanel.tsx',
+  'src/components/scripts/ScriptCategoryTree.tsx',
   'src/components/scripts/ScriptEditPage.tsx',
   'src/components/scripts/ScriptExecutionModal.tsx',
   'src/components/scripts/ScriptExecutionsPage.tsx',
