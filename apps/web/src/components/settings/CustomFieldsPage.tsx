@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Search, Settings, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Settings, AlertCircle } from 'lucide-react';
 import { fetchWithAuth } from '../../stores/auth';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 import type { CustomFieldDefinition, CustomFieldType, CustomFieldOptions } from '@breeze/shared';
 
 interface CustomField extends Omit<CustomFieldDefinition, 'createdAt' | 'updatedAt'> {
@@ -10,21 +12,26 @@ interface CustomField extends Omit<CustomFieldDefinition, 'createdAt' | 'updated
 
 type ModalMode = 'closed' | 'create' | 'edit' | 'delete';
 
-const FIELD_TYPES: Array<{ value: CustomFieldType; label: string; description: string }> = [
-  { value: 'text', label: 'Text', description: 'Single or multi-line text input' },
-  { value: 'number', label: 'Number', description: 'Numeric value with optional min/max' },
-  { value: 'boolean', label: 'Yes/No', description: 'Toggle or checkbox field' },
-  { value: 'dropdown', label: 'Dropdown', description: 'Select from predefined options' },
-  { value: 'date', label: 'Date', description: 'Date picker input' }
+const FIELD_TYPES: Array<{ value: CustomFieldType; labelKey: string; descriptionKey: string }> = [
+  { value: 'text', labelKey: 'settings.customFields.types.text', descriptionKey: 'settings.customFields.typeDescriptions.text' },
+  { value: 'number', labelKey: 'settings.customFields.types.number', descriptionKey: 'settings.customFields.typeDescriptions.number' },
+  { value: 'boolean', labelKey: 'settings.customFields.types.boolean', descriptionKey: 'settings.customFields.typeDescriptions.boolean' },
+  { value: 'dropdown', labelKey: 'settings.customFields.types.dropdown', descriptionKey: 'settings.customFields.typeDescriptions.dropdown' },
+  { value: 'date', labelKey: 'settings.customFields.types.date', descriptionKey: 'settings.customFields.typeDescriptions.date' }
 ];
 
 const DEVICE_TYPE_OPTIONS = [
-  { value: 'windows', label: 'Windows' },
-  { value: 'macos', label: 'macOS' },
-  { value: 'linux', label: 'Linux' }
+  { value: 'windows', labelKey: 'devices.osNames.windows' },
+  { value: 'macos', labelKey: 'devices.osNames.macos' },
+  { value: 'linux', labelKey: 'devices.osNames.linux' }
 ];
 
-export default function CustomFieldsPage() {
+type CustomFieldsPageProps = {
+  locale?: Locale;
+};
+
+export default function CustomFieldsPage({ locale: initialLocale = 'en' }: CustomFieldsPageProps) {
+  const { t } = useI18n(initialLocale);
   const [fields, setFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,16 +64,16 @@ export default function CustomFieldsPage() {
 
       const response = await fetchWithAuth(`/custom-fields?${params.toString()}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch custom fields');
+        throw new Error(t('settings.customFields.errors.load'));
       }
       const data = await response.json();
       setFields(data.data ?? data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch custom fields');
+      setError(err instanceof Error ? err.message : t('settings.customFields.errors.load'));
     } finally {
       setLoading(false);
     }
-  }, [typeFilter, searchQuery]);
+  }, [typeFilter, searchQuery, t]);
 
   useEffect(() => {
     fetchFields();
@@ -87,6 +94,12 @@ export default function CustomFieldsPage() {
     }
     return true;
   });
+
+  const fieldTypeLabel = (type: CustomFieldType) =>
+    t(FIELD_TYPES.find((fieldType) => fieldType.value === type)?.labelKey ?? type, undefined, type);
+
+  const deviceTypeLabel = (deviceType: string) =>
+    t(DEVICE_TYPE_OPTIONS.find((option) => option.value === deviceType)?.labelKey ?? deviceType, undefined, deviceType);
 
   const resetForm = () => {
     setFormName('');
@@ -189,22 +202,22 @@ export default function CustomFieldsPage() {
     const trimmedKey = formFieldKey.trim();
 
     if (!trimmedName) {
-      setFormError('Name is required');
+      setFormError(t('settings.customFields.validation.nameRequired'));
       return;
     }
 
     if (!trimmedKey) {
-      setFormError('Field key is required');
+      setFormError(t('settings.customFields.validation.fieldKeyRequired'));
       return;
     }
 
     if (!/^[a-z][a-z0-9_]*$/.test(trimmedKey)) {
-      setFormError('Field key must start with a letter and contain only lowercase letters, numbers, and underscores');
+      setFormError(t('settings.customFields.validation.fieldKeyFormat'));
       return;
     }
 
     if (formType === 'dropdown' && dropdownChoices.length < 2) {
-      setFormError('Dropdown fields need at least 2 choices');
+      setFormError(t('settings.customFields.validation.dropdownChoices'));
       return;
     }
 
@@ -247,14 +260,14 @@ export default function CustomFieldsPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to save custom field');
+        await response.json().catch(() => ({}));
+        throw new Error(t('settings.customFields.errors.save'));
       }
 
       await fetchFields();
       handleCloseModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to save custom field');
+      setFormError(err instanceof Error ? err.message : t('settings.customFields.errors.save'));
     } finally {
       setSubmitting(false);
     }
@@ -272,13 +285,13 @@ export default function CustomFieldsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete custom field');
+        throw new Error(t('settings.customFields.errors.delete'));
       }
 
       await fetchFields();
       handleCloseModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to delete custom field');
+      setFormError(err instanceof Error ? err.message : t('settings.customFields.errors.delete'));
     } finally {
       setSubmitting(false);
     }
@@ -296,9 +309,9 @@ export default function CustomFieldsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Custom Fields</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t('settings.customFields.title')}</h1>
           <p className="text-muted-foreground">
-            Define custom attributes to track additional information on devices.
+            {t('settings.customFields.description')}
           </p>
         </div>
         <button
@@ -307,7 +320,7 @@ export default function CustomFieldsPage() {
           className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
           <Plus className="h-4 w-4" />
-          Add Custom Field
+          {t('settings.customFields.addCustomField')}
         </button>
       </div>
 
@@ -325,7 +338,7 @@ export default function CustomFieldsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search fields..."
+            placeholder={t('settings.customFields.searchPlaceholder')}
             className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -334,10 +347,10 @@ export default function CustomFieldsPage() {
           onChange={(e) => setTypeFilter(e.target.value as CustomFieldType | '')}
           className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          <option value="">All Types</option>
+          <option value="">{t('settings.customFields.allTypes')}</option>
           {FIELD_TYPES.map((type) => (
             <option key={type.value} value={type.value}>
-              {type.label}
+              {t(type.labelKey)}
             </option>
           ))}
         </select>
@@ -348,8 +361,8 @@ export default function CustomFieldsPage() {
           <Settings className="mx-auto h-12 w-12 text-muted-foreground" />
           <p className="mt-4 text-sm text-muted-foreground">
             {searchQuery || typeFilter
-              ? 'No custom fields match your filters'
-              : 'No custom fields defined yet. Add one to start tracking custom device attributes.'}
+              ? t('settings.customFields.emptyFiltered')
+              : t('settings.customFields.empty')}
           </p>
           {!searchQuery && !typeFilter && (
             <button
@@ -358,7 +371,7 @@ export default function CustomFieldsPage() {
               className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               <Plus className="h-4 w-4" />
-              Add your first custom field
+              {t('settings.customFields.addFirst')}
             </button>
           )}
         </div>
@@ -367,12 +380,12 @@ export default function CustomFieldsPage() {
           <table className="w-full">
             <thead className="bg-muted/40">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Key</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Required</th>
-                <th className="px-4 py-3">Device Types</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">{t('settings.customFields.name')}</th>
+                <th className="px-4 py-3">{t('settings.customFields.key')}</th>
+                <th className="px-4 py-3">{t('settings.customFields.type')}</th>
+                <th className="px-4 py-3">{t('settings.customFields.required')}</th>
+                <th className="px-4 py-3">{t('settings.customFields.deviceTypes')}</th>
+                <th className="px-4 py-3 text-right">{t('settings.customFields.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -387,8 +400,8 @@ export default function CustomFieldsPage() {
                     </code>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full border px-2 py-0.5 text-xs capitalize">
-                      {field.type}
+                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                      {fieldTypeLabel(field.type as CustomFieldType)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -399,7 +412,7 @@ export default function CustomFieldsPage() {
                           : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {field.required ? 'Required' : 'Optional'}
+                      {field.required ? t('settings.customFields.requiredValue') : t('settings.customFields.optionalValue')}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -408,14 +421,14 @@ export default function CustomFieldsPage() {
                         {field.deviceTypes.map((dt) => (
                           <span
                             key={dt}
-                            className="rounded bg-muted px-1.5 py-0.5 text-xs capitalize"
+                            className="rounded bg-muted px-1.5 py-0.5 text-xs"
                           >
-                            {dt}
+                            {deviceTypeLabel(dt)}
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground">All</span>
+                      <span className="text-xs text-muted-foreground">{t('settings.customFields.allDeviceTypes')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -424,7 +437,7 @@ export default function CustomFieldsPage() {
                         type="button"
                         onClick={() => handleOpenEdit(field)}
                         className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                        title="Edit"
+                        title={t('settings.customFields.edit')}
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -432,7 +445,7 @@ export default function CustomFieldsPage() {
                         type="button"
                         onClick={() => handleOpenDelete(field)}
                         className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive"
-                        title="Delete"
+                        title={t('settings.customFields.delete')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -450,44 +463,44 @@ export default function CustomFieldsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-8 overflow-y-auto">
           <div className="w-full max-w-2xl my-8 rounded-lg border bg-card p-6 shadow-lg">
             <h2 className="text-lg font-semibold">
-              {modalMode === 'create' ? 'Add Custom Field' : 'Edit Custom Field'}
+              {modalMode === 'create' ? t('settings.customFields.addCustomField') : t('settings.customFields.editCustomField')}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {modalMode === 'create'
-                ? 'Define a new custom attribute for devices.'
-                : 'Update the custom field configuration.'}
+                ? t('settings.customFields.addDescription')
+                : t('settings.customFields.editDescription')}
             </p>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium">Display Name</label>
+                  <label className="text-sm font-medium">{t('settings.customFields.displayName')}</label>
                   <input
                     type="text"
                     value={formName}
                     onChange={(e) => handleNameChange(e.target.value)}
                     className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="e.g., Asset Tag"
+                    placeholder={t('settings.customFields.displayNamePlaceholder')}
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Field Key</label>
+                  <label className="text-sm font-medium">{t('settings.customFields.fieldKey')}</label>
                   <input
                     type="text"
                     value={formFieldKey}
                     onChange={(e) => setFormFieldKey(e.target.value)}
                     disabled={modalMode === 'edit'}
                     className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-                    placeholder="e.g., asset_tag"
+                    placeholder={t('settings.customFields.fieldKeyPlaceholder')}
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Used in filters and API. Cannot be changed after creation.
+                    {t('settings.customFields.fieldKeyHint')}
                   </p>
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium">Field Type</label>
+                <label className="text-sm font-medium">{t('settings.customFields.fieldType')}</label>
                 <div className="mt-2 grid gap-2 sm:grid-cols-3">
                   {FIELD_TYPES.map((type) => (
                     <button
@@ -506,9 +519,9 @@ export default function CustomFieldsPage() {
                           : 'hover:bg-muted'
                       }`}
                     >
-                      <div className="font-medium text-sm">{type.label}</div>
+                      <div className="font-medium text-sm">{t(type.labelKey)}</div>
                       <div className="text-xs text-muted-foreground">
-                        {type.description}
+                        {t(type.descriptionKey)}
                       </div>
                     </button>
                   ))}
@@ -518,7 +531,7 @@ export default function CustomFieldsPage() {
               {/* Type-specific options */}
               {formType === 'dropdown' && (
                 <div>
-                  <label className="text-sm font-medium">Dropdown Choices</label>
+                  <label className="text-sm font-medium">{t('settings.customFields.dropdownChoices')}</label>
                   <div className="mt-2 space-y-2">
                     {dropdownChoices.map((choice, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -528,7 +541,7 @@ export default function CustomFieldsPage() {
                           onChange={(e) =>
                             handleDropdownChoiceChange(index, 'label', e.target.value)
                           }
-                          placeholder="Label"
+                          placeholder={t('settings.customFields.choiceLabel')}
                           className="h-9 flex-1 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                         <input
@@ -537,7 +550,7 @@ export default function CustomFieldsPage() {
                           onChange={(e) =>
                             handleDropdownChoiceChange(index, 'value', e.target.value)
                           }
-                          placeholder="Value"
+                          placeholder={t('settings.customFields.choiceValue')}
                           className="h-9 w-32 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                         <button
@@ -555,7 +568,7 @@ export default function CustomFieldsPage() {
                       className="inline-flex h-9 items-center gap-1 rounded-md border px-3 text-sm font-medium hover:bg-muted"
                     >
                       <Plus className="h-4 w-4" />
-                      Add Choice
+                      {t('settings.customFields.addChoice')}
                     </button>
                   </div>
                 </div>
@@ -564,7 +577,7 @@ export default function CustomFieldsPage() {
               {formType === 'number' && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium">Minimum Value (optional)</label>
+                    <label className="text-sm font-medium">{t('settings.customFields.minimumValue')}</label>
                     <input
                       type="number"
                       value={formOptions.min ?? ''}
@@ -578,7 +591,7 @@ export default function CustomFieldsPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Maximum Value (optional)</label>
+                    <label className="text-sm font-medium">{t('settings.customFields.maximumValue')}</label>
                     <input
                       type="number"
                       value={formOptions.max ?? ''}
@@ -597,7 +610,7 @@ export default function CustomFieldsPage() {
               {formType === 'text' && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium">Max Length (optional)</label>
+                    <label className="text-sm font-medium">{t('settings.customFields.maxLength')}</label>
                     <input
                       type="number"
                       value={formOptions.maxLength ?? ''}
@@ -611,7 +624,7 @@ export default function CustomFieldsPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Pattern (regex, optional)</label>
+                    <label className="text-sm font-medium">{t('settings.customFields.pattern')}</label>
                     <input
                       type="text"
                       value={formOptions.pattern ?? ''}
@@ -621,7 +634,7 @@ export default function CustomFieldsPage() {
                           pattern: e.target.value || undefined
                         })
                       }
-                      placeholder="e.g., ^[A-Z]{2}-\\d{4}$"
+                      placeholder={t('settings.customFields.patternPlaceholder')}
                       className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
@@ -629,9 +642,9 @@ export default function CustomFieldsPage() {
               )}
 
               <div>
-                <label className="text-sm font-medium">Device Types (optional)</label>
+                    <label className="text-sm font-medium">{t('settings.customFields.deviceTypesOptional')}</label>
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to show on all device types
+                  {t('settings.customFields.deviceTypesHint')}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {DEVICE_TYPE_OPTIONS.map((dt) => (
@@ -649,7 +662,7 @@ export default function CustomFieldsPage() {
                         onChange={() => handleToggleDeviceType(dt.value)}
                         className="sr-only"
                       />
-                      {dt.label}
+                      {t(dt.labelKey)}
                     </label>
                   ))}
                 </div>
@@ -664,7 +677,7 @@ export default function CustomFieldsPage() {
                   className="h-4 w-4 rounded border-muted"
                 />
                 <label htmlFor="required" className="text-sm font-medium">
-                  Required field
+                  {t('settings.customFields.requiredField')}
                 </label>
               </div>
 
@@ -680,7 +693,7 @@ export default function CustomFieldsPage() {
                   onClick={handleCloseModal}
                   className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -688,10 +701,10 @@ export default function CustomFieldsPage() {
                   className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
                   {submitting
-                    ? 'Saving...'
+                    ? t('common.saving')
                     : modalMode === 'create'
-                      ? 'Create Field'
-                      : 'Save Changes'}
+                      ? t('settings.customFields.createField')
+                      : t('common.saveChanges')}
                 </button>
               </div>
             </form>
@@ -703,11 +716,11 @@ export default function CustomFieldsPage() {
       {modalMode === 'delete' && selectedField && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-            <h2 className="text-lg font-semibold">Delete Custom Field</h2>
+            <h2 className="text-lg font-semibold">{t('settings.customFields.deleteTitle')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete{' '}
+              {t('settings.customFields.deleteConfirmPrefix')}{' '}
               <span className="font-medium text-foreground">{selectedField.name}</span>?
-              This will remove the field definition and all stored values on devices.
+              {t('settings.customFields.deleteConfirmSuffix')}
             </p>
 
             {formError && (
@@ -722,7 +735,7 @@ export default function CustomFieldsPage() {
                 onClick={handleCloseModal}
                 className="h-10 rounded-md border px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -730,7 +743,7 @@ export default function CustomFieldsPage() {
                 disabled={submitting}
                 className="h-10 rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-60"
               >
-                {submitting ? 'Deleting...' : 'Delete Field'}
+                {submitting ? t('settings.customFields.deleting') : t('settings.customFields.deleteField')}
               </button>
             </div>
           </div>
