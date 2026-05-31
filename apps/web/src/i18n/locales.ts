@@ -1,6 +1,37 @@
 export const SUPPORTED_LOCALES = ['en', 'ru'] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
+type LocaleMetadata = {
+  code: Locale;
+  nativeName: string;
+  englishName: string;
+  textDirection: 'ltr' | 'rtl';
+  displayNames: Partial<Record<Locale, string>>;
+};
+
+export const LOCALE_METADATA: Record<Locale, LocaleMetadata> = {
+  en: {
+    code: 'en',
+    nativeName: 'English',
+    englishName: 'English',
+    textDirection: 'ltr',
+    displayNames: {
+      en: 'English',
+      ru: 'Английский',
+    },
+  },
+  ru: {
+    code: 'ru',
+    nativeName: 'Русский',
+    englishName: 'Russian',
+    textDirection: 'ltr',
+    displayNames: {
+      en: 'Russian',
+      ru: 'Русский',
+    },
+  },
+};
+
 export const DEFAULT_LOCALE: Locale = 'en';
 export const LOCALE_COOKIE_NAME = 'breeze_locale';
 export const LOCALE_STORAGE_KEY = LOCALE_COOKIE_NAME;
@@ -58,8 +89,7 @@ export function createLocaleCookie(locale: Locale): string {
 }
 
 export function getLocaleDisplayName(locale: Locale, displayLocale: Locale): string {
-  if (displayLocale === 'ru') {
-    return locale === 'ru' ? 'Русский' : 'Английский';
-  }
-  return locale === 'ru' ? 'Russian' : 'English';
+  return LOCALE_METADATA[locale].displayNames[displayLocale] ??
+    LOCALE_METADATA[locale].nativeName ??
+    LOCALE_METADATA[locale].englishName;
 }

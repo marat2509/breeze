@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE_NAME,
+  LOCALE_METADATA,
   SUPPORTED_LOCALES,
   createLocaleCookie,
   getLocaleDisplayName,
@@ -13,6 +14,7 @@ describe('i18n locale contracts', () => {
   it('defines English as default and Russian as supported', () => {
     expect(DEFAULT_LOCALE).toBe('en');
     expect(SUPPORTED_LOCALES).toEqual(['en', 'ru']);
+    expect(Object.keys(LOCALE_METADATA).sort()).toEqual([...SUPPORTED_LOCALES].sort());
     expect(isSupportedLocale('en')).toBe(true);
     expect(isSupportedLocale('ru')).toBe(true);
     expect(isSupportedLocale('de')).toBe(false);

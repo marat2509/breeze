@@ -37,22 +37,40 @@ function normalizePath(filePath: string): string {
 }
 
 function checkKeyParity(errors: string[]) {
-  const en = flatten(resources.en);
-  const ru = flatten(resources.ru);
-  const enKeys = Object.keys(en).sort();
-  const ruKeys = Object.keys(ru).sort();
-  const missingInRu = enKeys.filter(key => !(key in ru));
-  const extraInRu = ruKeys.filter(key => !(key in en));
+  const resourceLocales = new Set(Object.keys(resources));
+  const supportedLocales = new Set(SUPPORTED_LOCALES);
+  const base = flatten(resources.en);
+  const baseKeys = Object.keys(base).sort();
 
-  for (const key of missingInRu) errors.push(`ru is missing key: ${key}`);
-  for (const key of extraInRu) errors.push(`ru has extra key: ${key}`);
+  for (const locale of SUPPORTED_LOCALES) {
+    if (!resourceLocales.has(locale)) {
+      errors.push(`${locale} resources are missing`);
+      continue;
+    }
 
-  for (const key of enKeys) {
-    if (!(key in ru)) continue;
-    const enTokens = interpolationTokens(en[key]);
-    const ruTokens = interpolationTokens(ru[key]);
-    if (enTokens.join(',') !== ruTokens.join(',')) {
-      errors.push(`interpolation mismatch for ${key}: en=[${enTokens}] ru=[${ruTokens}]`);
+    if (locale === 'en') continue;
+
+    const localized = flatten(resources[locale]);
+    const localizedKeys = Object.keys(localized).sort();
+    const missing = baseKeys.filter(key => !(key in localized));
+    const extra = localizedKeys.filter(key => !(key in base));
+
+    for (const key of missing) errors.push(`${locale} is missing key: ${key}`);
+    for (const key of extra) errors.push(`${locale} has extra key: ${key}`);
+
+    for (const key of baseKeys) {
+      if (!(key in localized)) continue;
+      const baseTokens = interpolationTokens(base[key]);
+      const localizedTokens = interpolationTokens(localized[key]);
+      if (baseTokens.join(',') !== localizedTokens.join(',')) {
+        errors.push(`interpolation mismatch for ${locale}.${key}: en=[${baseTokens}] ${locale}=[${localizedTokens}]`);
+      }
+    }
+  }
+
+  for (const locale of resourceLocales) {
+    if (!supportedLocales.has(locale as typeof SUPPORTED_LOCALES[number])) {
+      errors.push(`resources include unsupported locale: ${locale}`);
     }
   }
 }
