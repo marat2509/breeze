@@ -114,6 +114,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/ScriptPickerModal.tsx',
   'src/components/patches/PatchApprovalModal.tsx',
   'src/components/patches/PatchInstallHistory.tsx',
+  'src/components/patches/PatchList.tsx',
   'src/components/patches/SourceFilterChips.tsx',
   'src/components/filters/ConditionGroup.tsx',
   'src/components/filters/ConditionRow.tsx',

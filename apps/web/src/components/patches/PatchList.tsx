@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePatchSelection } from './usePatchSelection';
+import { formatDate as formatLocalizedDate, formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 export type PatchSeverity = 'critical' | 'important' | 'moderate' | 'low';
 export type PatchApprovalStatus = 'pending' | 'approved' | 'declined' | 'deferred';
@@ -45,25 +47,19 @@ type PatchListProps = {
   onRetry?: () => void;
 };
 
-const severityConfig: Record<PatchSeverity, { label: string; color: string }> = {
-  critical: { label: 'Critical', color: 'bg-red-500/20 text-red-700 border-red-500/40' },
-  important: { label: 'Important', color: 'bg-orange-500/20 text-orange-700 border-orange-500/40' },
-  moderate: { label: 'Moderate', color: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/40' },
-  low: { label: 'Low', color: 'bg-blue-500/20 text-blue-700 border-blue-500/40' }
+const severityConfig: Record<PatchSeverity, { labelKey: string; color: string }> = {
+  critical: { labelKey: 'patchList.severity.critical', color: 'bg-red-500/20 text-red-700 border-red-500/40' },
+  important: { labelKey: 'patchList.severity.important', color: 'bg-orange-500/20 text-orange-700 border-orange-500/40' },
+  moderate: { labelKey: 'patchList.severity.moderate', color: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/40' },
+  low: { labelKey: 'patchList.severity.low', color: 'bg-blue-500/20 text-blue-700 border-blue-500/40' }
 };
 
-const approvalConfig: Record<PatchApprovalStatus, { label: string; color: string; icon: typeof CheckCircle }> = {
-  pending: { label: 'Pending', color: 'bg-warning/15 text-warning border-warning/30', icon: Clock },
-  approved: { label: 'Approved', color: 'bg-success/15 text-success border-success/30', icon: CheckCircle },
-  declined: { label: 'Declined', color: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
-  deferred: { label: 'Deferred', color: 'bg-blue-500/20 text-blue-700 border-blue-500/40', icon: Clock }
+const approvalConfig: Record<PatchApprovalStatus, { labelKey: string; color: string; icon: typeof CheckCircle }> = {
+  pending: { labelKey: 'patchList.approval.pending', color: 'bg-warning/15 text-warning border-warning/30', icon: Clock },
+  approved: { labelKey: 'patchList.approval.approved', color: 'bg-success/15 text-success border-success/30', icon: CheckCircle },
+  declined: { labelKey: 'patchList.approval.declined', color: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
+  deferred: { labelKey: 'patchList.approval.deferred', color: 'bg-blue-500/20 text-blue-700 border-blue-500/40', icon: Clock }
 };
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleDateString();
-}
 
 export default function PatchList({
   patches,
@@ -77,6 +73,7 @@ export default function PatchList({
   error,
   onRetry
 }: PatchListProps) {
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -146,7 +143,7 @@ export default function PatchList({
       await onBulkApprove(selectedPendingIds);
       clearSelection();
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'Failed to approve patches');
+      setBulkError(err instanceof Error ? err.message : t('patchList.errors.bulkApprove'));
     } finally {
       setBulkLoading(false);
     }
@@ -160,7 +157,7 @@ export default function PatchList({
       await onBulkDecline(selectedPendingIds);
       clearSelection();
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : 'Failed to decline patches');
+      setBulkError(err instanceof Error ? err.message : t('patchList.errors.bulkDecline'));
     } finally {
       setBulkLoading(false);
     }
@@ -170,9 +167,12 @@ export default function PatchList({
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Patches</h2>
+          <h2 className="text-lg font-semibold">{t('patchList.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            {filteredPatches.length} of {patches.length} patches
+            {t('patchList.summary', {
+              filtered: formatNumber(filteredPatches.length, locale),
+              total: formatNumber(patches.length, locale)
+            })}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center flex-wrap">
@@ -180,7 +180,7 @@ export default function PatchList({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              placeholder="Search patches..."
+              placeholder={t('patchList.searchPlaceholder')}
               value={query}
               onChange={event => {
                 setQuery(event.target.value);
@@ -197,11 +197,11 @@ export default function PatchList({
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Severities</option>
-            <option value="critical">Critical</option>
-            <option value="important">Important</option>
-            <option value="moderate">Moderate</option>
-            <option value="low">Low</option>
+            <option value="all">{t('patchList.filters.allSeverities')}</option>
+            <option value="critical">{t('patchList.severity.critical')}</option>
+            <option value="important">{t('patchList.severity.important')}</option>
+            <option value="moderate">{t('patchList.severity.moderate')}</option>
+            <option value="low">{t('patchList.severity.low')}</option>
           </select>
           <select
             value={statusFilter}
@@ -211,11 +211,11 @@ export default function PatchList({
             }}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-36"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="declined">Declined</option>
-            <option value="deferred">Deferred</option>
+            <option value="all">{t('patchList.filters.allStatus')}</option>
+            <option value="pending">{t('patchList.approval.pending')}</option>
+            <option value="approved">{t('patchList.approval.approved')}</option>
+            <option value="declined">{t('patchList.approval.declined')}</option>
+            <option value="deferred">{t('patchList.approval.deferred')}</option>
           </select>
           <button
             type="button"
@@ -227,10 +227,10 @@ export default function PatchList({
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            {showMoreFilters ? 'Less filters' : 'More filters'}
+            {showMoreFilters ? t('patchList.actions.lessFilters') : t('patchList.actions.moreFilters')}
             {(sourceFilter !== 'all' || osFilter !== 'all') && !showMoreFilters && (
               <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                {(sourceFilter !== 'all' ? 1 : 0) + (osFilter !== 'all' ? 1 : 0)}
+                {formatNumber((sourceFilter !== 'all' ? 1 : 0) + (osFilter !== 'all' ? 1 : 0), locale)}
               </span>
             )}
           </button>
@@ -244,7 +244,7 @@ export default function PatchList({
                 }}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-40"
               >
-                <option value="all">All Sources</option>
+                <option value="all">{t('patchList.filters.allSources')}</option>
                 {availableSources.map(source => (
                   <option key={source} value={source}>
                     {source}
@@ -259,7 +259,7 @@ export default function PatchList({
                 }}
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-32"
               >
-                <option value="all">All OS</option>
+                <option value="all">{t('patchList.filters.allOs')}</option>
                 {availableOs.map(os => (
                   <option key={os} value={os}>
                     {os}
@@ -275,7 +275,7 @@ export default function PatchList({
       {selectedIds.size > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
           <span className="text-sm font-medium">
-            {selectedIds.size} selected
+            {t('patchList.bulk.selected', { count: formatNumber(selectedIds.size, locale) })}
           </span>
           <div className="h-4 w-px bg-border" />
           {onBulkApprove && selectedPendingIds.length > 0 && (
@@ -286,7 +286,7 @@ export default function PatchList({
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-              Approve {selectedPendingIds.length}
+              {t('patchList.bulk.approve', { count: formatNumber(selectedPendingIds.length, locale) })}
             </button>
           )}
           {onBulkDecline && selectedPendingIds.length > 0 && (
@@ -297,7 +297,7 @@ export default function PatchList({
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
             >
               {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
-              Decline {selectedPendingIds.length}
+              {t('patchList.bulk.decline', { count: formatNumber(selectedPendingIds.length, locale) })}
             </button>
           )}
           {onDeploy && selectedApprovedIds.length > 0 && (
@@ -312,7 +312,7 @@ export default function PatchList({
               className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
             >
               <Download className="h-3.5 w-3.5" />
-              Deploy {selectedApprovedIds.length}
+              {t('patchList.bulk.deploy', { count: formatNumber(selectedApprovedIds.length, locale) })}
             </button>
           )}
           <button
@@ -320,7 +320,7 @@ export default function PatchList({
             onClick={clearSelection}
             className="ml-auto h-8 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
-            Clear selection
+            {t('patchList.actions.clearSelection')}
           </button>
         </div>
       )}
@@ -335,7 +335,7 @@ export default function PatchList({
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Loading patches...</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t('patchList.loading')}</p>
           </div>
         </div>
       ) : error && patches.length === 0 ? (
@@ -347,7 +347,7 @@ export default function PatchList({
               onClick={onRetry}
               className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Try again
+              {t('patchList.actions.tryAgain')}
             </button>
           )}
         </div>
@@ -361,8 +361,8 @@ export default function PatchList({
                     type="button"
                     onClick={toggleSelectAll}
                     className="flex items-center justify-center text-muted-foreground hover:text-foreground"
-                    title={allPageSelected ? 'Deselect all' : 'Select all'}
-                    aria-label={allPageSelected ? 'Deselect all patches' : 'Select all patches'}
+                    title={allPageSelected ? t('patchList.selection.deselectAll') : t('patchList.selection.selectAll')}
+                    aria-label={allPageSelected ? t('patchList.selection.deselectAllPatches') : t('patchList.selection.selectAllPatches')}
                   >
                     {allPageSelected ? (
                       <CheckSquare className="h-4 w-4" />
@@ -373,20 +373,20 @@ export default function PatchList({
                     )}
                   </button>
                 </th>
-                <th className="px-4 py-3">Patch</th>
-                <th className="px-4 py-3">Severity</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3">OS</th>
-                <th className="px-4 py-3">Release</th>
-                <th className="px-4 py-3">Approval</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">{t('patchList.columns.patch')}</th>
+                <th className="px-4 py-3">{t('patchList.columns.severity')}</th>
+                <th className="px-4 py-3">{t('patchList.columns.source')}</th>
+                <th className="px-4 py-3">{t('patchList.columns.os')}</th>
+                <th className="px-4 py-3">{t('patchList.columns.release')}</th>
+                <th className="px-4 py-3">{t('patchList.columns.approval')}</th>
+                <th className="px-4 py-3 text-right">{t('patchList.columns.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {paginatedPatches.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                    No patches found. Try adjusting your search or filters.
+                    {t('patchList.empty')}
                   </td>
                 </tr>
               ) : (
@@ -403,7 +403,9 @@ export default function PatchList({
                           type="button"
                           onClick={() => toggleSelect(patch.id)}
                           className="flex items-center justify-center text-muted-foreground hover:text-foreground"
-                          aria-label={isSelected ? `Deselect ${patch.title}` : `Select ${patch.title}`}
+                          aria-label={isSelected
+                            ? t('patchList.selection.deselectPatch', { patchTitle: patch.title })
+                            : t('patchList.selection.selectPatch', { patchTitle: patch.title })}
                         >
                           {isSelected ? (
                             <CheckSquare className="h-4 w-4 text-primary" />
@@ -420,7 +422,7 @@ export default function PatchList({
                               data-testid={`patch-row-${patch.id}-vendor`}
                               className="ml-2 text-xs text-muted-foreground font-normal"
                             >
-                              by {patch.vendor}
+                              {t('patchList.labels.vendorBy', { vendor: patch.vendor })}
                             </span>
                           )}
                         </div>
@@ -440,7 +442,7 @@ export default function PatchList({
                             ))}
                             {patch.cveIds.length > 3 && (
                               <span className="text-[10px] text-muted-foreground">
-                                +{patch.cveIds.length - 3} more
+                                {t('patchList.labels.moreCves', { count: formatNumber(patch.cveIds.length - 3, locale) })}
                               </span>
                             )}
                           </div>
@@ -451,16 +453,16 @@ export default function PatchList({
                       </td>
                       <td className="px-4 py-3">
                         <span className={cn('inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', severity.color)}>
-                          {severity.label}
+                          {t(severity.labelKey)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{patch.source}</td>
                       <td className="px-4 py-3 text-muted-foreground">{patch.os}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDate(patch.releaseDate)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatLocalizedDate(patch.releaseDate, locale)}</td>
                       <td className="px-4 py-3">
                         <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', approval.color)}>
                           <ApprovalIcon className="h-3.5 w-3.5" />
-                          {approval.label}
+                          {t(approval.labelKey)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -472,7 +474,7 @@ export default function PatchList({
                               className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
                             >
                               <Download className="h-3.5 w-3.5" />
-                              Deploy
+                              {t('patchList.actions.deploy')}
                             </button>
                           ) : (
                             <button
@@ -481,7 +483,7 @@ export default function PatchList({
                               className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium hover:bg-muted"
                             >
                               <Eye className="h-3.5 w-3.5" />
-                              Review
+                              {t('patchList.actions.review')}
                             </button>
                           )}
                           <button
@@ -489,7 +491,7 @@ export default function PatchList({
                             onClick={() => onView?.(patch)}
                             className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
                           >
-                            Details
+                            {t('patchList.actions.details')}
                           </button>
                         </div>
                       </td>
@@ -505,7 +507,10 @@ export default function PatchList({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Page {currentPage} of {totalPages}
+            {t('patchList.pagination.page', {
+              page: formatNumber(currentPage, locale),
+              totalPages: formatNumber(totalPages, locale)
+            })}
           </span>
           <div className="flex items-center gap-2">
             <button
