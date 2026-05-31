@@ -97,6 +97,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/devices/DeviceManagementTab.tsx',
   'src/components/devices/DeviceMetricsChart.tsx',
   'src/components/devices/DeviceNetworkConnections.tsx',
+  'src/components/devices/DevicePerformanceGraphs.tsx',
   'src/components/devices/DevicePeripheralsTab.tsx',
   'src/components/devices/DevicePlaybookHistory.tsx',
   'src/components/devices/DeviceScriptHistory.tsx',

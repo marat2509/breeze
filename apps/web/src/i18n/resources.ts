@@ -1504,6 +1504,40 @@ export const resources = {
         },
       },
     },
+    devicePerformanceGraphs: {
+      loading: 'Loading performance graphs...',
+      retry: 'Retry',
+      title: 'Performance Graphs',
+      description: 'CPU, RAM, disk usage and network bandwidth over time',
+      ranges: {
+        '24h': '24h',
+        '7d': '7d',
+        '30d': '30d',
+      },
+      metrics: {
+        cpu: 'CPU',
+        ram: 'RAM',
+        disk: 'Disk',
+      },
+      latest: {
+        metric: '{{name}} (latest)',
+        readOps: 'Read ops (latest)',
+        writeOps: 'Write ops (latest)',
+      },
+      network: {
+        title: 'Network Bandwidth',
+        download: 'Download',
+        upload: 'Upload',
+      },
+      disk: {
+        title: 'Disk Activity',
+        readThroughput: 'Read throughput',
+        writeThroughput: 'Write throughput',
+      },
+      errors: {
+        fetch: 'Failed to fetch performance metrics',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -3475,6 +3509,40 @@ export const resources = {
           totalTime: 'Общее время',
           startupItems: 'Элементы автозагрузки',
         },
+      },
+    },
+    devicePerformanceGraphs: {
+      loading: 'Загрузка графиков производительности...',
+      retry: 'Повторить',
+      title: 'Графики производительности',
+      description: 'CPU, RAM, диск и сетевой трафик во времени',
+      ranges: {
+        '24h': '24 ч',
+        '7d': '7 д',
+        '30d': '30 д',
+      },
+      metrics: {
+        cpu: 'CPU',
+        ram: 'RAM',
+        disk: 'Диск',
+      },
+      latest: {
+        metric: '{{name}} (последнее)',
+        readOps: 'Операции чтения (последнее)',
+        writeOps: 'Операции записи (последнее)',
+      },
+      network: {
+        title: 'Сетевой трафик',
+        download: 'Скачивание',
+        upload: 'Отдача',
+      },
+      disk: {
+        title: 'Активность диска',
+        readThroughput: 'Скорость чтения',
+        writeThroughput: 'Скорость записи',
+      },
+      errors: {
+        fetch: 'Не удалось загрузить графики производительности',
       },
     },
     scripts: {
