@@ -2161,6 +2161,54 @@ export const resources = {
         page: 'Page {{page}} of {{totalPages}}',
       },
     },
+    updateRingForm: {
+      labels: {
+        name: 'Name',
+        order: 'Order',
+        deferralDays: 'Deferral (days)',
+        deadlineDays: 'Deadline (days)',
+        gracePeriodHours: 'Grace (hours)',
+        description: 'Description',
+        categoryRules: 'Category Rules',
+        autoApprove: 'Auto-approve',
+        deferral: 'Deferral',
+      },
+      placeholders: {
+        name: 'e.g. Pilot, Broad',
+        deadlineNone: 'None',
+        description: 'Optional description',
+        deferralOverride: '—',
+      },
+      actions: {
+        add: 'Add',
+        addCategoryRule: 'Add Category Rule',
+        removeRule: 'Remove category rule',
+        cancel: 'Cancel',
+        save: 'Save Ring',
+        saving: 'Saving...',
+      },
+      empty: {
+        noRules: 'No rules — all patches require manual approval.',
+      },
+      categories: {
+        security: 'Security Updates',
+        feature: 'Feature Updates',
+        driver: 'Drivers',
+        firmware: 'Firmware',
+        thirdPartyApp: 'Third-Party Apps',
+        definition: 'Definition Updates',
+      },
+      severity: {
+        critical: 'Critical',
+        important: 'Important',
+        moderate: 'Moderate',
+        low: 'Low',
+      },
+      validation: {
+        selectCategory: 'Select a category',
+        nameRequired: 'Ring name is required',
+      },
+    },
     scripts: {
       picker: {
         title: 'Select Script',
@@ -4789,6 +4837,54 @@ export const resources = {
       empty: 'Кольца обновлений не найдены.',
       pagination: {
         page: 'Страница {{page}} из {{totalPages}}',
+      },
+    },
+    updateRingForm: {
+      labels: {
+        name: 'Название',
+        order: 'Порядок',
+        deferralDays: 'Отсрочка (дн.)',
+        deadlineDays: 'Крайний срок (дн.)',
+        gracePeriodHours: 'Льготный период (ч.)',
+        description: 'Описание',
+        categoryRules: 'Правила категорий',
+        autoApprove: 'Автоодобрение',
+        deferral: 'Отсрочка',
+      },
+      placeholders: {
+        name: 'например, Pilot, Broad',
+        deadlineNone: 'Нет',
+        description: 'Необязательное описание',
+        deferralOverride: '—',
+      },
+      actions: {
+        add: 'Добавить',
+        addCategoryRule: 'Добавить правило категории',
+        removeRule: 'Удалить правило категории',
+        cancel: 'Отмена',
+        save: 'Сохранить кольцо',
+        saving: 'Сохранение...',
+      },
+      empty: {
+        noRules: 'Правил нет — все патчи требуют ручного одобрения.',
+      },
+      categories: {
+        security: 'Обновления безопасности',
+        feature: 'Функциональные обновления',
+        driver: 'Драйверы',
+        firmware: 'Прошивки',
+        thirdPartyApp: 'Сторонние приложения',
+        definition: 'Обновления определений',
+      },
+      severity: {
+        critical: 'Критический',
+        important: 'Важный',
+        moderate: 'Средний',
+        low: 'Низкий',
+      },
+      validation: {
+        selectCategory: 'Выберите категорию',
+        nameRequired: 'Укажите название кольца',
       },
     },
     scripts: {

@@ -117,6 +117,7 @@ const HARD_CODED_SCAN_FILES = [
   'src/components/patches/PatchList.tsx',
   'src/components/patches/RingSelector.tsx',
   'src/components/patches/SourceFilterChips.tsx',
+  'src/components/patches/UpdateRingForm.tsx',
   'src/components/patches/UpdateRingList.tsx',
   'src/components/filters/ConditionGroup.tsx',
   'src/components/filters/ConditionRow.tsx',

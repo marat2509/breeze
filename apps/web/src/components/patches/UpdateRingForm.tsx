@@ -3,26 +3,34 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2 } from 'lucide-react';
+import { useI18n } from '@/i18n/react';
+import type { TranslationParams } from '@/i18n/resources';
 import { cn } from '@/lib/utils';
 
-const categoryRuleSchema = z.object({
-  category: z.string().min(1, 'Select a category'),
-  autoApprove: z.boolean(),
-  autoApproveSeverities: z.array(z.enum(['critical', 'important', 'moderate', 'low'])).optional(),
-  deferralDaysOverride: z.coerce.number().int().min(0).max(365).nullable().optional(),
-});
+type Translate = (key: string, params?: TranslationParams, fallback?: string) => string;
 
-const ringSchema = z.object({
-  name: z.string().min(1, 'Ring name is required'),
-  description: z.string().optional(),
-  ringOrder: z.coerce.number().int().min(0).max(100),
-  deferralDays: z.coerce.number().int().min(0).max(365),
-  deadlineDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
-  gracePeriodHours: z.coerce.number().int().min(0).max(168),
-  categoryRules: z.array(categoryRuleSchema).optional(),
-});
+function createCategoryRuleSchema(t: Translate) {
+  return z.object({
+    category: z.string().min(1, t('updateRingForm.validation.selectCategory')),
+    autoApprove: z.boolean(),
+    autoApproveSeverities: z.array(z.enum(['critical', 'important', 'moderate', 'low'])).optional(),
+    deferralDaysOverride: z.coerce.number().int().min(0).max(365).nullable().optional(),
+  });
+}
 
-export type UpdateRingFormValues = z.infer<typeof ringSchema>;
+function createRingSchema(t: Translate) {
+  return z.object({
+    name: z.string().min(1, t('updateRingForm.validation.nameRequired')),
+    description: z.string().optional(),
+    ringOrder: z.coerce.number().int().min(0).max(100),
+    deferralDays: z.coerce.number().int().min(0).max(365),
+    deadlineDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
+    gracePeriodHours: z.coerce.number().int().min(0).max(168),
+    categoryRules: z.array(createCategoryRuleSchema(t)).optional(),
+  });
+}
+
+export type UpdateRingFormValues = z.infer<ReturnType<typeof createRingSchema>>;
 
 type UpdateRingFormProps = {
   onSubmit?: (values: UpdateRingFormValues) => void | Promise<void>;
@@ -33,28 +41,30 @@ type UpdateRingFormProps = {
 };
 
 const categoryOptions = [
-  { value: 'security', label: 'Security Updates' },
-  { value: 'feature', label: 'Feature Updates' },
-  { value: 'driver', label: 'Drivers' },
-  { value: 'firmware', label: 'Firmware' },
-  { value: 'third_party_app', label: 'Third-Party Apps' },
-  { value: 'definition', label: 'Definition Updates' },
+  { value: 'security', labelKey: 'updateRingForm.categories.security' },
+  { value: 'feature', labelKey: 'updateRingForm.categories.feature' },
+  { value: 'driver', labelKey: 'updateRingForm.categories.driver' },
+  { value: 'firmware', labelKey: 'updateRingForm.categories.firmware' },
+  { value: 'third_party_app', labelKey: 'updateRingForm.categories.thirdPartyApp' },
+  { value: 'definition', labelKey: 'updateRingForm.categories.definition' },
 ];
 
 const severityOptions = [
-  { value: 'critical' as const, label: 'Critical', color: 'border-red-500/40 bg-red-500/10 text-red-700' },
-  { value: 'important' as const, label: 'Important', color: 'border-orange-500/40 bg-orange-500/10 text-orange-700' },
-  { value: 'moderate' as const, label: 'Moderate', color: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-700' },
-  { value: 'low' as const, label: 'Low', color: 'border-blue-500/40 bg-blue-500/10 text-blue-700' },
+  { value: 'critical' as const, labelKey: 'updateRingForm.severity.critical', color: 'border-red-500/40 bg-red-500/10 text-red-700' },
+  { value: 'important' as const, labelKey: 'updateRingForm.severity.important', color: 'border-orange-500/40 bg-orange-500/10 text-orange-700' },
+  { value: 'moderate' as const, labelKey: 'updateRingForm.severity.moderate', color: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-700' },
+  { value: 'low' as const, labelKey: 'updateRingForm.severity.low', color: 'border-blue-500/40 bg-blue-500/10 text-blue-700' },
 ];
 
 export default function UpdateRingForm({
   onSubmit,
   onCancel,
   defaultValues,
-  submitLabel = 'Save Ring',
+  submitLabel,
   loading,
 }: UpdateRingFormProps) {
+  const { t } = useI18n();
+  const ringSchema = useMemo(() => createRingSchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -100,16 +110,16 @@ export default function UpdateRingForm({
       {/* Ring Details + Timing — single row */}
       <div className="grid gap-3 sm:grid-cols-6">
         <div className="sm:col-span-2">
-          <label className="text-xs font-medium">Name</label>
+          <label className="text-xs font-medium">{t('updateRingForm.labels.name')}</label>
           <input
             {...register('name')}
             className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="e.g. Pilot, Broad"
+            placeholder={t('updateRingForm.placeholders.name')}
           />
           {errors.name && <p className="mt-0.5 text-xs text-destructive">{errors.name.message}</p>}
         </div>
         <div>
-          <label className="text-xs font-medium">Order</label>
+          <label className="text-xs font-medium">{t('updateRingForm.labels.order')}</label>
           <input
             type="number"
             min={0}
@@ -119,7 +129,7 @@ export default function UpdateRingForm({
           />
         </div>
         <div>
-          <label className="text-xs font-medium">Deferral (days)</label>
+          <label className="text-xs font-medium">{t('updateRingForm.labels.deferralDays')}</label>
           <input
             type="number"
             min={0}
@@ -129,18 +139,18 @@ export default function UpdateRingForm({
           />
         </div>
         <div>
-          <label className="text-xs font-medium">Deadline (days)</label>
+          <label className="text-xs font-medium">{t('updateRingForm.labels.deadlineDays')}</label>
           <input
             type="number"
             min={0}
             max={365}
             {...register('deadlineDays')}
             className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="None"
+            placeholder={t('updateRingForm.placeholders.deadlineNone')}
           />
         </div>
         <div>
-          <label className="text-xs font-medium">Grace (hours)</label>
+          <label className="text-xs font-medium">{t('updateRingForm.labels.gracePeriodHours')}</label>
           <input
             type="number"
             min={0}
@@ -153,18 +163,18 @@ export default function UpdateRingForm({
 
       {/* Description — compact */}
       <div>
-        <label className="text-xs font-medium">Description</label>
+        <label className="text-xs font-medium">{t('updateRingForm.labels.description')}</label>
         <input
           {...register('description')}
           className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Optional description"
+          placeholder={t('updateRingForm.placeholders.description')}
         />
       </div>
 
       {/* Category Rules */}
       <div>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Category Rules</h3>
+          <h3 className="text-sm font-semibold">{t('updateRingForm.labels.categoryRules')}</h3>
           {availableCategories.length > 0 && (
             <button
               type="button"
@@ -179,14 +189,14 @@ export default function UpdateRingForm({
               className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted transition"
             >
               <Plus className="h-3 w-3" />
-              Add
+              {t('updateRingForm.actions.add')}
             </button>
           )}
         </div>
 
         {fields.length === 0 ? (
           <div className="mt-2 rounded-md border border-dashed px-4 py-3 text-center">
-            <p className="text-xs text-muted-foreground">No rules — all patches require manual approval.</p>
+            <p className="text-xs text-muted-foreground">{t('updateRingForm.empty.noRules')}</p>
             {availableCategories.length > 0 && (
               <button
                 type="button"
@@ -201,7 +211,7 @@ export default function UpdateRingForm({
                 className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition"
               >
                 <Plus className="h-3 w-3" />
-                Add Category Rule
+                {t('updateRingForm.actions.addCategoryRule')}
               </button>
             )}
           </div>
@@ -219,7 +229,7 @@ export default function UpdateRingForm({
                     {categoryOptions
                       .filter((c) => c.value === rule?.category || !usedCategories.includes(c.value))
                       .map((c) => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
+                        <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                       ))}
                   </select>
 
@@ -230,7 +240,7 @@ export default function UpdateRingForm({
                       {...register(`categoryRules.${index}.autoApprove`)}
                       className="h-3.5 w-3.5 rounded border-muted"
                     />
-                    Auto-approve
+                    {t('updateRingForm.labels.autoApprove')}
                   </label>
 
                   {/* Severity chips (inline, shown when auto-approve) */}
@@ -248,7 +258,7 @@ export default function UpdateRingForm({
                               : 'border-muted text-muted-foreground hover:text-foreground'
                           )}
                         >
-                          {sev.label}
+                          {t(sev.labelKey)}
                         </button>
                       ))}
                     </div>
@@ -256,14 +266,14 @@ export default function UpdateRingForm({
 
                   {/* Deferral override */}
                   <div className="ml-auto flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground">Deferral</span>
+                    <span className="text-[10px] text-muted-foreground">{t('updateRingForm.labels.deferral')}</span>
                     <input
                       type="number"
                       min={0}
                       max={365}
                       {...register(`categoryRules.${index}.deferralDaysOverride`)}
                       className="h-8 w-14 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                      placeholder="—"
+                      placeholder={t('updateRingForm.placeholders.deferralOverride')}
                     />
                   </div>
 
@@ -271,6 +281,7 @@ export default function UpdateRingForm({
                   <button
                     type="button"
                     onClick={() => remove(index)}
+                    aria-label={t('updateRingForm.actions.removeRule')}
                     className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -291,7 +302,7 @@ export default function UpdateRingForm({
             className="h-9 rounded-md border px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
             disabled={isLoading}
           >
-            Cancel
+            {t('updateRingForm.actions.cancel')}
           </button>
         )}
         <button
@@ -299,7 +310,7 @@ export default function UpdateRingForm({
           disabled={isLoading}
           className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
         >
-          {isLoading ? 'Saving...' : submitLabel}
+          {isLoading ? t('updateRingForm.actions.saving') : submitLabel ?? t('updateRingForm.actions.save')}
         </button>
       </div>
     </form>
