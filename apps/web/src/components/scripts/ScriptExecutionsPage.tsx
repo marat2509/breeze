@@ -6,9 +6,10 @@ import ScriptExecutionModal, { type Device, type Site } from './ScriptExecutionM
 import type { Script } from './ScriptList';
 import type { ScriptParameter } from './ScriptForm';
 import { fetchWithAuth } from '../../stores/auth';
-import { extractApiError } from '@/lib/apiError';
+import { extractLocalizedApiError } from '@/lib/apiError';
 import { navigateTo } from '@/lib/navigation';
 import Breadcrumbs from '../layout/Breadcrumbs';
+import { useI18n } from '@/i18n/react';
 
 type ScriptExecutionsPageProps = {
   scriptId: string;
@@ -20,6 +21,7 @@ type ScriptWithDetails = Script & {
 };
 
 export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageProps) {
+  const { locale, t } = useI18n();
   const [script, setScript] = useState<ScriptWithDetails | null>(null);
   const [executions, setExecutions] = useState<ScriptExecution[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -37,14 +39,14 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch script');
+        throw new Error(t('scripts.executions.fetchScriptFailed'));
       }
       const data = await response.json();
       setScript(data.script ?? data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('scripts.executions.errorGeneric'));
     }
-  }, [scriptId]);
+  }, [scriptId, t]);
 
   const fetchExecutions = useCallback(async () => {
     try {
@@ -56,16 +58,16 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch executions');
+        throw new Error(t('scripts.executions.fetchExecutionsFailed'));
       }
       const data = await response.json();
       setExecutions(data.data ?? data.executions ?? (Array.isArray(data) ? data : []));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('scripts.executions.errorGeneric'));
     } finally {
       setLoading(false);
     }
-  }, [scriptId]);
+  }, [scriptId, t]);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -123,7 +125,7 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
         return;
       }
       const data = await response.json();
-      throw new Error(extractApiError(data, 'Failed to execute script'));
+      throw new Error(extractLocalizedApiError(data, t('scripts.executions.executeFailed'), locale));
     }
 
     // Refresh executions list
@@ -135,7 +137,7 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading executions...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('scripts.executions.loading')}</p>
         </div>
       </div>
     );
@@ -150,7 +152,7 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
             href="/scripts"
             className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            Back to Scripts
+            {t('scripts.executions.backToScripts')}
           </a>
           <button
             type="button"
@@ -160,7 +162,7 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
             }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Try again
+            {t('scripts.executions.tryAgain')}
           </button>
         </div>
       </div>
@@ -170,9 +172,9 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
   return (
     <div className="space-y-6">
       <Breadcrumbs items={[
-        { label: 'Scripts', href: '/scripts' },
-        { label: script?.name || 'Script', href: `/scripts/${scriptId}` },
-        { label: 'Executions' }
+        { label: t('scripts.executions.scriptsCrumb'), href: '/scripts' },
+        { label: script?.name || t('scripts.executions.scriptCrumb'), href: `/scripts/${scriptId}` },
+        { label: t('scripts.executions.executionsCrumb') }
       ]} />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -183,9 +185,9 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
             <ArrowLeft className="h-5 w-5" />
           </a>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Execution History</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t('scripts.executions.title')}</h1>
             <p className="text-muted-foreground">
-              {script?.name || 'Loading...'}
+              {script?.name || t('common.loading')}
             </p>
           </div>
         </div>
@@ -196,7 +198,7 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
             <Play className="h-4 w-4" />
-            Run Script
+            {t('scripts.executions.runScript')}
           </button>
         )}
       </div>
@@ -211,20 +213,20 @@ export default function ScriptExecutionsPage({ scriptId }: ScriptExecutionsPageP
         <div className="rounded-md border bg-muted/20 p-4">
           <div className="grid gap-4 sm:grid-cols-4">
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Language</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.executions.language')}</p>
               <p className="text-sm font-medium capitalize">{script.language}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Category</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.executions.category')}</p>
               <p className="text-sm font-medium">{script.category}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Target OS</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.executions.targetOs')}</p>
               <p className="text-sm font-medium">{script.osTypes.join(', ')}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Status</p>
-              <p className="text-sm font-medium capitalize">{script.status}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('scripts.executions.status')}</p>
+              <p className="text-sm font-medium capitalize">{t(`scripts.executions.statusValues.${script.status ?? 'active'}`, undefined, script.status ?? 'active')}</p>
             </div>
           </div>
           {script.description && (
