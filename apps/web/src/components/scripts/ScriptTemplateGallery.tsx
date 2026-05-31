@@ -3,6 +3,8 @@ import { Download, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 export type ScriptTemplate = {
   id: string;
@@ -25,6 +27,7 @@ const languageConfig: Record<ScriptTemplate['language'], { label: string; color:
 };
 
 export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateGalleryProps) {
+  const { locale, t } = useI18n();
   const [templates, setTemplates] = useState<ScriptTemplate[]>([]);
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -45,17 +48,17 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
       }
 
       if (!response.ok) {
-        throw new Error('Failed to fetch templates');
+        throw new Error(t('scripts.gallery.fetchFailed'));
       }
 
       const data = await response.json();
       setTemplates(data.templates || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load templates');
+      setError(err instanceof Error ? err.message : t('scripts.gallery.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchTemplates();
@@ -98,8 +101,8 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Template Gallery</h2>
-            <p className="text-sm text-muted-foreground">Browse reusable script templates.</p>
+            <h2 className="text-lg font-semibold">{t('scripts.gallery.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('scripts.gallery.subtitle')}</p>
           </div>
         </div>
         <div className="mt-6 flex h-48 items-center justify-center">
@@ -114,8 +117,8 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Template Gallery</h2>
-            <p className="text-sm text-muted-foreground">Browse reusable script templates.</p>
+            <h2 className="text-lg font-semibold">{t('scripts.gallery.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('scripts.gallery.subtitle')}</p>
           </div>
         </div>
         <div className="mt-6 flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -125,7 +128,7 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
             onClick={fetchTemplates}
             className="text-sm text-primary hover:underline"
           >
-            Try again
+            {t('scripts.gallery.tryAgain')}
           </button>
         </div>
       </div>
@@ -136,8 +139,8 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Template Gallery</h2>
-          <p className="text-sm text-muted-foreground">Browse reusable script templates.</p>
+          <h2 className="text-lg font-semibold">{t('scripts.gallery.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('scripts.gallery.subtitle')}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative">
@@ -146,7 +149,7 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
               type="search"
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Search templates"
+              placeholder={t('scripts.gallery.searchPlaceholder')}
               className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-56"
             />
           </div>
@@ -155,7 +158,7 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
             onChange={event => setCategoryFilter(event.target.value)}
             className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="all">All Categories</option>
+            <option value="all">{t('scripts.gallery.allCategories')}</option>
             {categories.map(category => (
               <option key={category} value={category}>
                 {category}
@@ -167,11 +170,11 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
             onChange={event => setLanguageFilter(event.target.value)}
             className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
-            <option value="all">All Languages</option>
-            <option value="powershell">PowerShell</option>
-            <option value="bash">Bash</option>
-            <option value="python">Python</option>
-            <option value="cmd">CMD</option>
+            <option value="all">{t('scripts.gallery.allLanguages')}</option>
+            <option value="powershell">{languageConfig.powershell.label}</option>
+            <option value="bash">{languageConfig.bash.label}</option>
+            <option value="python">{languageConfig.python.label}</option>
+            <option value="cmd">{languageConfig.cmd.label}</option>
           </select>
         </div>
       </div>
@@ -179,7 +182,7 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredTemplates.length === 0 ? (
           <div className="col-span-full py-8 text-center text-muted-foreground">
-            No templates found matching your criteria.
+            {t('scripts.gallery.noTemplates')}
           </div>
         ) : (
           filteredTemplates.map(template => (
@@ -202,14 +205,14 @@ export default function ScriptTemplateGallery({ onUseTemplate }: ScriptTemplateG
               <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Download className="h-3 w-3" />
-                  {template.downloads.toLocaleString()} downloads
+                  {t('scripts.gallery.downloads', { count: formatNumber(template.downloads, locale) })}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleUseTemplate(template)}
                   className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                 >
-                  Use Template
+                  {t('scripts.gallery.useTemplate')}
                 </button>
               </div>
             </div>

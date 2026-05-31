@@ -3,6 +3,9 @@ import { Calendar, GitCompare, RotateCcw, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatDate } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
+import type { Locale } from '@/i18n/locales';
 
 type ScriptVersion = {
   id: string;
@@ -51,11 +54,11 @@ const diffLines = (base: string, compare: string): DiffLine[] => {
   return lines;
 };
 
-const formatDate = (dateString: string, timezone?: string) => {
+const formatVersionDate = (dateString: string, locale: Locale, timezone?: string) => {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
   const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return date.toLocaleDateString(undefined, {
+  return formatDate(date, locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -64,6 +67,7 @@ const formatDate = (dateString: string, timezone?: string) => {
 };
 
 export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersionHistoryProps) {
+  const { locale, t } = useI18n();
   const [versions, setVersions] = useState<ScriptVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -86,7 +90,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch script versions');
+        throw new Error(t('scripts.versions.fetchFailed'));
       }
 
       const script = await response.json();
@@ -97,9 +101,9 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
         id: `v${script.version || 1}`,
         version: script.version || 1,
         date: script.updatedAt || script.createdAt || new Date().toISOString(),
-        author: script.createdByName || script.createdBy || 'Unknown',
+        author: script.createdByName || script.createdBy || t('scripts.versions.unknownAuthor'),
         authorEmail: script.createdByEmail,
-        changelog: script.changelog || ['Current version'],
+        changelog: script.changelog || [t('scripts.versions.currentVersion')],
         content: script.content || ''
       };
 
@@ -108,11 +112,11 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
       setCompareRightId(currentVersion.id);
       setCompareLeftId(currentVersion.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('scripts.versions.errorGeneric'));
     } finally {
       setLoading(false);
     }
-  }, [scriptId]);
+  }, [scriptId, t]);
 
   useEffect(() => {
     fetchVersions();
@@ -158,7 +162,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to rollback script');
+        throw new Error(t('scripts.versions.rollbackFailed'));
       }
 
       setActiveVersionId(rollbackTarget.id);
@@ -166,7 +170,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
       // Refresh to get the new version
       await fetchVersions();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rollback failed');
+      setError(err instanceof Error ? err.message : t('scripts.versions.rollbackFailed'));
     } finally {
       setRollbackLoading(false);
     }
@@ -178,7 +182,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Loading version history...</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t('scripts.versions.loading')}</p>
           </div>
         </div>
       </div>
@@ -196,7 +200,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
           onClick={fetchVersions}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Try again
+          {t('scripts.versions.tryAgain')}
         </button>
       </div>
     );
@@ -206,13 +210,13 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Version History</h2>
-          <p className="text-sm text-muted-foreground">Track script revisions and compare changes.</p>
+          <h2 className="text-lg font-semibold">{t('scripts.versions.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('scripts.versions.subtitle')}</p>
         </div>
         <div className="text-sm text-muted-foreground">
-          Active version:{' '}
+          {t('scripts.versions.activeVersion')}{' '}
           <span className="font-medium text-foreground">
-            {activeVersion ? `v${activeVersion.version}` : 'Unknown'}
+            {activeVersion ? `v${activeVersion.version}` : t('scripts.versions.unknownVersion')}
           </span>
         </div>
       </div>
@@ -221,7 +225,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
         <div className="space-y-3">
           {sortedVersions.length === 0 ? (
             <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No version history available.
+              {t('scripts.versions.empty')}
             </div>
           ) : (
             sortedVersions.map(version => (
@@ -238,14 +242,14 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
                       <span className="text-sm font-semibold">v{version.version}</span>
                       {activeVersionId === version.id && (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                          Active
+                          {t('scripts.versions.activeBadge')}
                         </span>
                       )}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {formatDate(version.date, timezone)}
+                        {formatVersionDate(version.date, locale, timezone)}
                       </span>
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
@@ -260,7 +264,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
                       className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
                     >
                       <RotateCcw className="h-3 w-3" />
-                      Rollback
+                      {t('scripts.versions.rollback')}
                     </button>
                   )}
                 </div>
@@ -278,7 +282,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <GitCompare className="h-4 w-4" />
-              Compare Versions
+              {t('scripts.versions.compare')}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <select
@@ -310,8 +314,8 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
             {lines.length === 0 ? (
               <p className="text-muted-foreground">
                 {sortedVersions.length <= 1
-                  ? 'Only one version available. Make changes to see diffs.'
-                  : 'Select two versions to view a diff.'}
+                  ? t('scripts.versions.onlyOneDiff')
+                  : t('scripts.versions.selectTwoDiff')}
               </p>
             ) : (
               lines.map((line, index) => (
@@ -337,9 +341,9 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
       {rollbackTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-            <h3 className="text-lg font-semibold">Rollback Script</h3>
+            <h3 className="text-lg font-semibold">{t('scripts.versions.rollbackTitle')}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Roll back to version <span className="font-medium">v{rollbackTarget.version}</span>? This will make it the active revision.
+              {t('scripts.versions.rollbackConfirm', { version: `v${rollbackTarget.version}` })}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -348,7 +352,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
                 disabled={rollbackLoading}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -357,7 +361,7 @@ export default function ScriptVersionHistory({ scriptId, timezone }: ScriptVersi
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 {rollbackLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {rollbackLoading ? 'Rolling back...' : 'Confirm Rollback'}
+                {rollbackLoading ? t('scripts.versions.rollingBack') : t('scripts.versions.confirmRollback')}
               </button>
             </div>
           </div>

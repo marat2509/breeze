@@ -3,6 +3,8 @@ import { Check, Plus, Tag, Trash2, Loader2 } from 'lucide-react';
 import { cn, resolveUiColorToken, sanitizeHexColor } from '@/lib/utils';
 import { fetchWithAuth } from '../../stores/auth';
 import { navigateTo } from '@/lib/navigation';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 type ScriptTag = {
   id: string;
@@ -22,6 +24,7 @@ type ScriptTagManagerProps = {
 };
 
 export default function ScriptTagManager({ tags: externalTags, scripts: externalScripts }: ScriptTagManagerProps) {
+  const { locale, t } = useI18n();
   const [tags, setTags] = useState<ScriptTag[]>(
     (externalTags ?? []).map((tag) => ({
       ...tag,
@@ -53,7 +56,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
           void navigateTo('/login', { replace: true });
           return;
         }
-        throw new Error('Failed to fetch scripts');
+        throw new Error(t('scripts.tags.fetchFailed'));
       }
 
       const scriptsData = await scriptsResponse.json();
@@ -112,11 +115,11 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       setTags(Array.from(tagMap.values()));
       setScripts(scriptItems);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('scripts.tags.errorGeneric'));
     } finally {
       setLoading(false);
     }
-  }, [externalTags, externalScripts]);
+  }, [externalTags, externalScripts, t]);
 
   useEffect(() => {
     fetchData();
@@ -184,7 +187,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       setTags(prev => [...prev, newTag]);
       setNewTagName('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add tag');
+      setError(err instanceof Error ? err.message : t('scripts.tags.addFailed'));
     } finally {
       setSaving(false);
     }
@@ -211,7 +214,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       });
       setTagToDelete(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete tag');
+      setError(err instanceof Error ? err.message : t('scripts.tags.deleteFailed'));
     } finally {
       setDeleteLoading(false);
     }
@@ -263,7 +266,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       );
       setBulkTagIds(new Set());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to assign tags');
+      setError(err instanceof Error ? err.message : t('scripts.tags.assignFailed'));
     } finally {
       setSaving(false);
     }
@@ -275,7 +278,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Loading tags...</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t('scripts.tags.loading')}</p>
           </div>
         </div>
       </div>
@@ -293,7 +296,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
           onClick={fetchData}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Try again
+          {t('scripts.tags.tryAgain')}
         </button>
       </div>
     );
@@ -303,12 +306,17 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Script Tags</h2>
-          <p className="text-sm text-muted-foreground">{tags.length} tags across {scripts.length} scripts</p>
+          <h2 className="text-lg font-semibold">{t('scripts.tags.title')}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t('scripts.tags.summary', {
+              tagCount: formatNumber(tags.length, locale),
+              scriptCount: formatNumber(scripts.length, locale),
+            })}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Tag className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Manage reusable labels</span>
+          <span className="text-sm text-muted-foreground">{t('scripts.tags.manageLabels')}</span>
         </div>
       </div>
 
@@ -321,11 +329,11 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/20 p-4">
-            <h3 className="text-sm font-semibold">All Tags</h3>
+            <h3 className="text-sm font-semibold">{t('scripts.tags.allTags')}</h3>
             <div className="mt-3 space-y-2">
               {tags.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  No tags found. Create one below.
+                  {t('scripts.tags.noTags')}
                 </div>
               ) : (
                 tags.map(tag => (
@@ -334,14 +342,16 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
                       <span className={cn('h-3 w-3 rounded-full', resolveUiColorToken(tag.color, '#64748b').bgClass)} />
                       <div>
                         <p className="text-sm font-medium">{tag.name}</p>
-                        <p className="text-xs text-muted-foreground">Used on {tagUsage[tag.id] || 0} scripts</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t('scripts.tags.usedOn', { count: formatNumber(tagUsage[tag.id] || 0, locale) })}
+                        </p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setTagToDelete(tag)}
                       className="flex h-8 w-8 items-center justify-center rounded-md text-red-500 hover:bg-red-500/10"
-                      title="Delete tag"
+                      title={t('scripts.tags.deleteTag')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -352,12 +362,12 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
           </div>
 
           <div className="rounded-lg border bg-background p-4">
-            <h3 className="text-sm font-semibold">Add New Tag</h3>
+            <h3 className="text-sm font-semibold">{t('scripts.tags.addNew')}</h3>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 value={newTagName}
                 onChange={event => setNewTagName(event.target.value)}
-                placeholder="Tag name"
+                placeholder={t('scripts.tags.namePlaceholder')}
                 className="h-10 flex-1 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <div className="flex items-center gap-2">
@@ -374,7 +384,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
                   className="flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  Add
+                  {t('scripts.tags.add')}
                 </button>
               </div>
             </div>
@@ -383,12 +393,12 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
 
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/20 p-4">
-            <h3 className="text-sm font-semibold">Bulk Assign Tags</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Select scripts, then choose tags to apply.</p>
+            <h3 className="text-sm font-semibold">{t('scripts.tags.bulkAssign')}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{t('scripts.tags.bulkDescription')}</p>
             <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
               {scripts.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  No scripts found.
+                  {t('scripts.tags.noScripts')}
                 </div>
               ) : (
                 scripts.map(script => (
@@ -436,7 +446,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
               className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Apply tags to selected scripts
+              {t('scripts.tags.applyToSelected')}
             </button>
           </div>
         </div>
@@ -445,9 +455,9 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
       {tagToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-red-600">Delete Tag</h3>
+            <h3 className="text-lg font-semibold text-red-600">{t('scripts.tags.deleteTitle')}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Delete the <span className="font-medium">{tagToDelete.name}</span> tag? This will remove it from all scripts.
+              {t('scripts.tags.deleteConfirm', { name: tagToDelete.name })}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -456,7 +466,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
                 disabled={deleteLoading}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -465,7 +475,7 @@ export default function ScriptTagManager({ tags: externalTags, scripts: external
                 className="inline-flex items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
               >
                 {deleteLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Delete
+                {t('scripts.tags.deleteAction')}
               </button>
             </div>
           </div>
