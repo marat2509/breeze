@@ -1,18 +1,21 @@
 import { Smartphone, Plug, UserX } from 'lucide-react';
+import { useI18n } from '@/i18n/react';
 
 interface AccountSubNavProps {
   current: 'devices' | 'connected-apps' | 'delete';
 }
 
 const links = [
-  { key: 'devices', href: '/account/devices', label: 'Trusted devices', icon: Smartphone },
-  { key: 'connected-apps', href: '/account/connected-apps', label: 'Connected apps', icon: Plug },
-  { key: 'delete', href: '/account/delete', label: 'Delete account', icon: UserX },
+  { key: 'devices', href: '/account/devices', labelKey: 'account.nav.devices', icon: Smartphone },
+  { key: 'connected-apps', href: '/account/connected-apps', labelKey: 'account.nav.connectedApps', icon: Plug },
+  { key: 'delete', href: '/account/delete', labelKey: 'account.nav.deleteAccount', icon: UserX },
 ] as const;
 
 export default function AccountSubNav({ current }: AccountSubNavProps) {
+  const { t } = useI18n();
+
   return (
-    <nav aria-label="Account sections" className="border-b">
+    <nav aria-label={t('account.nav.sections')} className="border-b">
       <ul className="-mb-px flex flex-wrap gap-x-6 gap-y-2">
         {links.map((link) => {
           const Icon = link.icon;
@@ -29,7 +32,7 @@ export default function AccountSubNav({ current }: AccountSubNavProps) {
                 }
               >
                 <Icon className="h-4 w-4" aria-hidden />
-                {link.label}
+                {t(link.labelKey)}
               </a>
             </li>
           );

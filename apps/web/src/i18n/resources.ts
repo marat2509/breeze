@@ -278,6 +278,36 @@ export const resources = {
         },
       },
     },
+    account: {
+      common: {
+        backToSettings: 'Back to settings',
+        signedInAs: 'Signed in as',
+        name: 'Name',
+        email: 'Email',
+      },
+      nav: {
+        sections: 'Account sections',
+        devices: 'Trusted devices',
+        connectedApps: 'Connected apps',
+        deleteAccount: 'Delete account',
+      },
+      testApproval: {
+        title: 'Test the approval flow',
+        description: "Send a sandbox approval push to your own Breeze Mobile devices. Tapping the push will take over your phone with the approval screen for 60 seconds. Approving or denying does not run any real action - it's purely for testing.",
+        cardTitle: 'Send a test approval to your phone',
+        cardDescription: "We'll deliver a push within a few seconds. The approval expires automatically after 60 seconds if you don't act on it.",
+        sendButton: 'Send test approval to my phone',
+        sending: 'Sending...',
+        sentTitle: 'Sent. Check your phone within a few seconds.',
+        sentDescription: 'Push delivered to {{sent}} of {{registered}} registered devices. The approval expires in 60 seconds.',
+        noDevices: "We don't see a registered Breeze Mobile device on your account. Sign in to the app at least once, then try again.",
+        reviewTip: 'Tip: this page is safe to share with App Store reviewers. They can sign in with the provided test account, click the button, and verify the approval takeover end-to-end.',
+        errors: {
+          sendFailed: 'We could not send a test approval. Please try again.',
+          network: 'Network error. Please try again.',
+        },
+      },
+    },
     devices: {
       status: {
         online: 'Online',
@@ -3661,6 +3691,36 @@ export const resources = {
         },
         errors: {
           saveFailed: 'Не удалось сохранить панели',
+        },
+      },
+    },
+    account: {
+      common: {
+        backToSettings: 'Назад к настройкам',
+        signedInAs: 'Выполнен вход как',
+        name: 'Имя',
+        email: 'Email',
+      },
+      nav: {
+        sections: 'Разделы аккаунта',
+        devices: 'Доверенные устройства',
+        connectedApps: 'Подключённые приложения',
+        deleteAccount: 'Удаление аккаунта',
+      },
+      testApproval: {
+        title: 'Проверка потока подтверждения',
+        description: 'Отправьте тестовый push на свои устройства Breeze Mobile. Нажатие на push откроет экран подтверждения на телефоне на 60 секунд. Одобрение или отказ не запускают реальное действие - это только проверка.',
+        cardTitle: 'Отправить тестовое подтверждение на телефон',
+        cardDescription: 'Мы доставим push в течение нескольких секунд. Подтверждение автоматически истечёт через 60 секунд, если вы ничего не сделаете.',
+        sendButton: 'Отправить тестовое подтверждение на телефон',
+        sending: 'Отправка...',
+        sentTitle: 'Отправлено. Проверьте телефон в ближайшие секунды.',
+        sentDescription: 'Push доставлен на {{sent}} из {{registered}} зарегистрированных устройств. Подтверждение истечёт через 60 секунд.',
+        noDevices: 'Мы не видим зарегистрированное устройство Breeze Mobile в вашем аккаунте. Войдите в приложение хотя бы один раз, затем повторите попытку.',
+        reviewTip: 'Совет: эту страницу можно безопасно показать ревьюерам App Store. Они могут войти с тестовым аккаунтом, нажать кнопку и проверить поток подтверждения до конца.',
+        errors: {
+          sendFailed: 'Не удалось отправить тестовое подтверждение. Повторите попытку.',
+          network: 'Ошибка сети. Повторите попытку.',
         },
       },
     },

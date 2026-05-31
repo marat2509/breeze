@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, BellRing, CheckCircle2, Loader2, ShieldAlert, Smartphone } from 'lucide-react';
 import { fetchWithAuth, useAuthStore } from '../../stores/auth';
+import { formatNumber } from '@/i18n/formatters';
+import { useI18n } from '@/i18n/react';
 
 interface TriggerResponse {
   approvalId: string;
@@ -18,6 +20,7 @@ type TriggerState =
   | { kind: 'error'; message: string };
 
 export default function TestApprovalPage() {
+  const { locale, t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const [state, setState] = useState<TriggerState>({ kind: 'idle' });
 
@@ -31,13 +34,7 @@ export default function TestApprovalPage() {
       });
 
       if (!res.ok) {
-        let message = 'We could not send a test approval. Please try again.';
-        try {
-          const data = (await res.json()) as { error?: string };
-          if (data?.error) message = data.error;
-        } catch {
-          // Non-JSON body — keep generic message.
-        }
+        const message = t('account.testApproval.errors.sendFailed');
         setState({ kind: 'error', message });
         return;
       }
@@ -48,9 +45,8 @@ export default function TestApprovalPage() {
         return;
       }
       setState({ kind: 'sent', response: data });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Network error. Please try again.';
-      setState({ kind: 'error', message });
+    } catch {
+      setState({ kind: 'error', message: t('account.testApproval.errors.network') });
     }
   }
 
@@ -64,22 +60,20 @@ export default function TestApprovalPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to settings
+          {t('account.common.backToSettings')}
         </a>
-        <h1 className="text-2xl font-semibold tracking-tight">Test the approval flow</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('account.testApproval.title')}</h1>
         <p className="text-sm text-muted-foreground">
-          Send a sandbox approval push to your own Breeze Mobile devices. Tapping the push will
-          take over your phone with the approval screen for 60 seconds. Approving or denying does
-          not run any real action — it's purely for testing.
+          {t('account.testApproval.description')}
         </p>
       </div>
 
       <section className="space-y-2 rounded-md border bg-muted/40 p-4 text-sm">
-        <p className="font-medium text-foreground">Signed in as</p>
+        <p className="font-medium text-foreground">{t('account.common.signedInAs')}</p>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
-          <dt>Name</dt>
+          <dt>{t('account.common.name')}</dt>
           <dd className="text-foreground">{user?.name ?? '—'}</dd>
-          <dt>Email</dt>
+          <dt>{t('account.common.email')}</dt>
           <dd className="text-foreground">{user?.email ?? '—'}</dd>
         </dl>
       </section>
@@ -88,10 +82,9 @@ export default function TestApprovalPage() {
         <div className="flex gap-3">
           <BellRing className="h-6 w-6 flex-none text-primary" aria-hidden />
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Send a test approval to your phone</h2>
+            <h2 className="text-lg font-semibold">{t('account.testApproval.cardTitle')}</h2>
             <p className="text-sm text-muted-foreground">
-              We'll deliver a push within a few seconds. The approval expires automatically after
-              60 seconds if you don't act on it.
+              {t('account.testApproval.cardDescription')}
             </p>
           </div>
         </div>
@@ -106,12 +99,12 @@ export default function TestApprovalPage() {
           {isSending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Sending…
+              {t('account.testApproval.sending')}
             </>
           ) : (
             <>
               <Smartphone className="h-4 w-4" aria-hidden />
-              Send test approval to my phone
+              {t('account.testApproval.sendButton')}
             </>
           )}
         </button>
@@ -123,12 +116,12 @@ export default function TestApprovalPage() {
           >
             <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
             <div className="space-y-1">
-              <p className="font-medium">Sent. Check your phone within a few seconds.</p>
+              <p className="font-medium">{t('account.testApproval.sentTitle')}</p>
               <p className="text-xs text-muted-foreground">
-                Push delivered to {state.response.pushSentToDeviceCount} of{' '}
-                {state.response.registeredDeviceCount} registered device
-                {state.response.registeredDeviceCount === 1 ? '' : 's'}. The approval expires in 60
-                seconds.
+                {t('account.testApproval.sentDescription', {
+                  sent: formatNumber(state.response.pushSentToDeviceCount, locale),
+                  registered: formatNumber(state.response.registeredDeviceCount, locale),
+                })}
               </p>
             </div>
           </div>
@@ -141,8 +134,7 @@ export default function TestApprovalPage() {
           >
             <ShieldAlert className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
             <p>
-              We don't see a registered Breeze Mobile device on your account. Sign in to the app
-              at least once, then try again.
+              {t('account.testApproval.noDevices')}
             </p>
           </div>
         )}
@@ -159,8 +151,7 @@ export default function TestApprovalPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Tip: this page is safe to share with App Store reviewers. They can sign in with the
-        provided test account, click the button, and verify the approval takeover end-to-end.
+        {t('account.testApproval.reviewTip')}
       </p>
     </div>
   );

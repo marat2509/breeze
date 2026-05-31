@@ -2,9 +2,13 @@
 import Layout from '../../layouts/Layout.astro';
 import AuthOverlay from '../../components/auth/AuthOverlay';
 import TestApprovalPage from '../../components/account/TestApprovalPage';
+import { resolveLocaleFromRequest } from '../../i18n/locales';
+import { translate } from '../../i18n/resources';
+
+const locale = resolveLocaleFromRequest(Astro.request);
 ---
 
-<Layout title="Test approval">
+<Layout title={translate(locale, 'account.testApproval.title')} locale={locale}>
   <AuthOverlay client:load />
   <TestApprovalPage client:load />
 </Layout>
